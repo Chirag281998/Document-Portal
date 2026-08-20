@@ -1,0 +1,6 @@
+{
+  "name": "Document Portal",
+  "description": "Document Bank and Technical Drawing Repository for Engineering Branches (Civil, Mechanical, E&I) with Cloudflare R2 integration, 53 structure nodes, interactive CAD canvas, authorized Data Entry uploads, and high-performance document management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
