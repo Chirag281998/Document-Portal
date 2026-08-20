@@ -124,6 +124,12 @@ export default function App() {
     });
 
     setNodes(updated);
+    if (inspectNode && inspectNode.code === nodeCode) {
+      setInspectNode({
+        ...inspectNode,
+        files: inspectNode.files.filter(f => f.id !== fileId)
+      });
+    }
 
     try {
       await fetch('/api/nodes', {
@@ -134,6 +140,32 @@ export default function App() {
     } catch (e) {
       console.warn('Server sync failed', e);
     }
+  };
+
+  const handleDeleteBranch = async (branch: Branch) => {
+    const updated = nodes.map(node => ({
+      ...node,
+      files: node.files.filter(f => f.branch !== branch)
+    }));
+
+    setNodes(updated);
+    if (inspectNode) {
+      setInspectNode({
+        ...inspectNode,
+        files: inspectNode.files.filter(f => f.branch !== branch)
+      });
+    }
+
+    try {
+      await fetch('/api/nodes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodes: updated }),
+      });
+    } catch (e) {
+      console.warn('Server sync failed', e);
+    }
+    localStorage.setItem('eng_docs_master_nodes', JSON.stringify(updated));
   };
 
   const handleResetToZeroFiles = async () => {
@@ -217,6 +249,8 @@ export default function App() {
               onSelectBranch={setSelectedBranch}
               onOpenUploadModal={(code) => handleOpenUpload(code)}
               onSelectNode={(node) => setInspectNode(node)}
+              onDeleteFile={handleDeleteFile}
+              onDeleteBranch={handleDeleteBranch}
             />
           )}
 

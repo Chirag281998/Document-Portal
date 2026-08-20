@@ -225,13 +225,18 @@ export const StructureDetailsModal: React.FC<StructureDetailsModalProps> = ({
                       <span>Download / Open</span>
                     </button>
 
-                    {canUpload && onDeleteFile && (
+                    {onDeleteFile && (
                       <button
-                        onClick={() => onDeleteFile(node.code, file.id)}
-                        className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                        title="Remove file"
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to delete "${file.name}" from ${node.code}?`)) {
+                            onDeleteFile(node.code, file.id);
+                          }
+                        }}
+                        className="px-2.5 py-1.5 bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 hover:border-red-600 text-xs font-bold rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                        title="Delete this document"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete</span>
                       </button>
                     )}
                   </div>
