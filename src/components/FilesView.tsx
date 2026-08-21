@@ -45,22 +45,25 @@ export const FilesView: React.FC<FilesViewProps> = ({
     };
   }, [nodes]);
 
-  // Filter 53 structures based on search and selected category
+  // Filter 53 structures based on search and selected branch/category
   const filteredNodes = useMemo(() => {
     return nodes.filter(node => {
+      const branchFiles = node.files.filter(f => f.branch === selectedBranch);
       const matchSearch =
         node.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         node.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
         node.id.includes(searchQuery) ||
-        node.files.some(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        branchFiles.some(f => f.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
       return matchSearch;
     });
-  }, [nodes, searchQuery]);
+  }, [nodes, searchQuery, selectedBranch]);
 
   const handleDownloadAllNodeFiles = (node: StructureNode, e: React.MouseEvent) => {
     e.stopPropagation();
-    const relevantFiles = node.files.filter(f => f.category === selectedCategory);
+    const relevantFiles = node.files.filter(
+      f => f.branch === selectedBranch && f.category === selectedCategory
+    );
 
     const content = `ENGINEERING DOCUMENT REPOSITORY - BATCH EXPORT\n` +
       `Structure Node: ${node.fullTag}\n` +
@@ -74,7 +77,7 @@ export const FilesView: React.FC<FilesViewProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${node.code}_${selectedCategory}_Document_Manifest.txt`;
+    link.download = `${node.code}_${selectedBranch.toUpperCase()}_${selectedCategory}_Document_Manifest.txt`;
     link.click();
     URL.revokeObjectURL(url);
 
@@ -239,7 +242,9 @@ export const FilesView: React.FC<FilesViewProps> = ({
                 </tr>
               ) : (
                 filteredNodes.map((node, index) => {
-                  const relevantFiles = node.files.filter(f => f.category === selectedCategory);
+                  const relevantFiles = node.files.filter(
+                    f => f.branch === selectedBranch && f.category === selectedCategory
+                  );
                   const totalCategoryBytes = relevantFiles.reduce((acc, f) => acc + f.sizeBytes, 0);
                   const isZebra = index % 2 === 1;
 

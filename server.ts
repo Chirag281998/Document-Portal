@@ -311,7 +311,7 @@ app.post('/api/r2/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file provided in form-data' });
     }
 
-    const { nodeCode, branch, category, drawingNumber, revision, uploadedBy, status } = req.body;
+    const { nodeCode, branch, category, drawingNumber, revision, uploadedBy, status, relativePath } = req.body;
     const cleanFileName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     const r2Key = `drawings/${nodeCode || 'GENERAL'}/${branch || 'civil'}/${category || 'DRAWINGS'}/${Date.now()}-${cleanFileName}`;
     let downloadUrl = `/api/r2/download/${path.basename(file.path)}`;
@@ -349,7 +349,7 @@ app.post('/api/r2/upload', upload.single('file'), async (req, res) => {
 
     const newFileRecord: StoredFile = {
       id: `${nodeCode || 'ST'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      name: file.originalname,
+      name: relativePath || file.originalname,
       extension: ext,
       sizeBytes: file.size,
       sizeFormatted: formatBytes(file.size),

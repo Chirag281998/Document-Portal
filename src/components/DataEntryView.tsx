@@ -892,6 +892,15 @@ export const DataEntryView: React.FC<DataEntryViewProps> = ({
           </div>
 
           <button
+            onClick={() => onOpenUploadModal('ST-1')}
+            className="px-3.5 py-1.5 bg-[#002046] hover:bg-[#1b365d] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+            title="Upload single/multiple files or entire folder to plant structures"
+          >
+            <UploadCloud className="w-3.5 h-3.5" />
+            <span>Upload Files / Folder</span>
+          </button>
+
+          <button
             onClick={handleExportCSV}
             className="p-2 text-[#545f72] hover:text-[#002046] hover:bg-[#f2f4f6] border border-[#c4c6cf] rounded-xl text-xs transition-colors flex items-center gap-1 cursor-pointer"
             title="Export CSV manifest"

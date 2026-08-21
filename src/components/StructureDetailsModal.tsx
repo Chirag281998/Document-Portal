@@ -10,6 +10,7 @@ interface StructureDetailsModalProps {
   onUploadForThisNode?: (nodeCode: string) => void;
   onDeleteFile?: (nodeCode: string, fileId: string) => void;
   canUpload?: boolean;
+  initialBranch?: Branch;
 }
 
 export const StructureDetailsModal: React.FC<StructureDetailsModalProps> = ({
@@ -19,8 +20,16 @@ export const StructureDetailsModal: React.FC<StructureDetailsModalProps> = ({
   onUploadForThisNode,
   onDeleteFile,
   canUpload = false,
+  initialBranch,
 }) => {
   const [selectedCategoryTab, setSelectedCategoryTab] = useState<string>('ALL');
+  const [selectedBranchTab, setSelectedBranchTab] = useState<string>(initialBranch || 'ALL');
+
+  React.useEffect(() => {
+    if (isOpen && initialBranch) {
+      setSelectedBranchTab(initialBranch);
+    }
+  }, [isOpen, initialBranch]);
 
   if (!isOpen || !node) return null;
 
@@ -33,9 +42,17 @@ export const StructureDetailsModal: React.FC<StructureDetailsModalProps> = ({
     { label: 'SO', value: 'SO' },
   ];
 
+  const branchOptions: { label: string; value: string }[] = [
+    { label: 'ALL DISCIPLINES', value: 'ALL' },
+    { label: 'CIVIL', value: 'civil' },
+    { label: 'MECHANICAL', value: 'mechanical' },
+    { label: 'E&I', value: 'eni' },
+  ];
+
   const displayedFiles = node.files.filter(f => {
-    if (selectedCategoryTab === 'ALL') return true;
-    return f.category === selectedCategoryTab;
+    const matchCategory = selectedCategoryTab === 'ALL' || f.category === selectedCategoryTab;
+    const matchBranch = selectedBranchTab === 'ALL' || f.branch === selectedBranchTab;
+    return matchCategory && matchBranch;
   });
 
   const totalBytes = node.files.reduce((acc, f) => acc + f.sizeBytes, 0);
@@ -123,22 +140,42 @@ export const StructureDetailsModal: React.FC<StructureDetailsModalProps> = ({
           </button>
         </div>
 
-        {/* Category Filters Bar */}
-        <div className="bg-[#f2f4f6] px-6 py-2.5 border-b border-[#c4c6cf] flex justify-between items-center overflow-x-auto hide-scrollbar gap-2">
-          <div className="flex space-x-2">
-            {categories.map((c) => (
-              <button
-                key={c.value}
-                onClick={() => setSelectedCategoryTab(c.value)}
-                className={`px-3 py-1 text-xs font-bold rounded-md uppercase tracking-wider transition-colors cursor-pointer ${
-                  selectedCategoryTab === c.value
-                    ? 'bg-[#002046] text-white shadow-2xs'
-                    : 'bg-white text-[#545f72] border border-[#c4c6cf] hover:bg-[#e6e8ea]'
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
+        {/* Filter Controls (Discipline + Category) */}
+        <div className="bg-[#f2f4f6] px-6 py-2.5 border-b border-[#c4c6cf] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Discipline Pills */}
+            <div className="flex bg-white p-0.5 rounded-lg border border-[#c4c6cf]">
+              {branchOptions.map((b) => (
+                <button
+                  key={b.value}
+                  onClick={() => setSelectedBranchTab(b.value)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md uppercase tracking-wider transition-colors cursor-pointer ${
+                    selectedBranchTab === b.value
+                      ? 'bg-[#002046] text-white shadow-2xs'
+                      : 'text-[#545f72] hover:text-[#002046]'
+                  }`}
+                >
+                  {b.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Category Pills */}
+            <div className="flex space-x-1 overflow-x-auto hide-scrollbar">
+              {categories.map((c) => (
+                <button
+                  key={c.value}
+                  onClick={() => setSelectedCategoryTab(c.value)}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-md uppercase tracking-wider transition-colors cursor-pointer ${
+                    selectedCategoryTab === c.value
+                      ? 'bg-[#002046] text-white shadow-2xs'
+                      : 'bg-white text-[#545f72] border border-[#c4c6cf] hover:bg-[#e6e8ea]'
+                  }`}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {canUpload && onUploadForThisNode && (
@@ -147,7 +184,7 @@ export const StructureDetailsModal: React.FC<StructureDetailsModalProps> = ({
                 onClose();
                 onUploadForThisNode(node.code);
               }}
-              className="text-xs font-bold text-white bg-[#002046] hover:bg-[#1b365d] px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-xs uppercase tracking-wider cursor-pointer"
+              className="text-xs font-bold text-white bg-[#002046] hover:bg-[#1b365d] px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap shadow-xs uppercase tracking-wider cursor-pointer self-end sm:self-auto"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Upload Document</span>

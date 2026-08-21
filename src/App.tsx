@@ -297,8 +297,9 @@ export default function App() {
         node={inspectNode}
         onClose={() => setInspectNode(null)}
         onUploadForThisNode={(code) => handleOpenUpload(code)}
-        onDeleteFile={handleDeleteFile}
+        onDeleteFile={activeView === 'data-entry' ? handleDeleteFile : undefined}
         canUpload={activeView === 'data-entry'}
+        initialBranch={selectedBranch}
       />
 
       {/* Settings Modal */}
