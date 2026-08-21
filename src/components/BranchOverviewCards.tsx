@@ -38,13 +38,13 @@ export const BranchOverviewCards: React.FC<BranchOverviewCardsProps> = ({
     },
     {
       branch: 'mechanical',
-      label: 'Mechanical Piping',
+      label: 'Mechanical Engineering',
       iconName: 'precision_manufacturing',
       totalFiles: mechFiles.length,
       totalSizeBytes: mechBytes,
       totalSizeFormatted: formatBytes(mechBytes),
       imageUrl: BRANCH_IMAGES.mechanical,
-      imageAlt: 'Industrial mechanical piping valves and plant assembly',
+      imageAlt: 'Industrial mechanical engineering equipment and plant assembly',
       activeNodesCount: nodes.filter(n => n.files.some(f => f.branch === 'mechanical')).length || 53
     },
     {

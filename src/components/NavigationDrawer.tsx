@@ -211,7 +211,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
               >
                 <span className="text-xs font-bold">Mechanical</span>
                 <span className={`text-[9px] font-mono mt-0.5 ${selectedBranch === 'mechanical' ? 'text-sky-200' : 'text-[#74777f]'}`}>
-                  Piping
+                  Engineering
                 </span>
               </button>
 

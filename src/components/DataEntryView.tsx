@@ -742,7 +742,7 @@ export const DataEntryView: React.FC<DataEntryViewProps> = ({
             
             <div className="absolute top-2.5 left-3 flex items-center gap-1.5">
               <span className="text-[10px] font-bold tracking-wider font-mono text-white bg-black/60 backdrop-blur-xs px-2 py-0.5 rounded shadow-2xs uppercase">
-                MECHANICAL PIPING
+                MECHANICAL ENGINEERING
               </span>
               {selectedBranch === 'mechanical' && (
                 <span className="px-1.5 py-0.5 bg-emerald-500 text-white rounded text-[9px] font-bold">
@@ -772,7 +772,7 @@ export const DataEntryView: React.FC<DataEntryViewProps> = ({
                 e.stopPropagation();
                 setBranchDeleteTarget({
                   branch: 'mechanical',
-                  label: 'Mechanical Piping',
+                  label: 'Mechanical Engineering',
                   count: branchRadioStats.mechanical.count,
                   totalSize: branchRadioStats.mechanical.totalSize,
                 });
@@ -783,7 +783,7 @@ export const DataEntryView: React.FC<DataEntryViewProps> = ({
                   ? 'bg-red-50 hover:bg-red-600 text-red-700 hover:text-white border border-red-200 hover:border-red-600 shadow-2xs'
                   : 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
               }`}
-              title="Delete all Mechanical Piping documents across all structures"
+              title="Delete all Mechanical Engineering documents across all structures"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete Mech All</span>

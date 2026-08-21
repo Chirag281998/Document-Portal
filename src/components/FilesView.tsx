@@ -95,10 +95,10 @@ export const FilesView: React.FC<FilesViewProps> = ({
     },
     {
       id: 'mechanical' as Branch,
-      title: 'Mechanical',
+      title: 'Mechanical Engineering',
       stats: `${branchStats.mechanical.sizeFormatted} • ${branchStats.mechanical.count} Files`,
       imageUrl: BRANCH_IMAGES.mechanical,
-      imageAlt: 'Mechanical piping structure',
+      imageAlt: 'Mechanical engineering structure',
     },
     {
       id: 'eni' as Branch,

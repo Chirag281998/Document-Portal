@@ -267,7 +267,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
   const branchLabels: Record<Branch, { label: string; tag: string; bg: string; text: string }> = {
     civil: { label: 'Civil Engineering', tag: 'CIVIL', bg: 'bg-amber-100', text: 'text-amber-900' },
-    mechanical: { label: 'Mechanical Piping', tag: 'MECH', bg: 'bg-blue-100', text: 'text-blue-900' },
+    mechanical: { label: 'Mechanical Engineering', tag: 'MECH', bg: 'bg-blue-100', text: 'text-blue-900' },
     eni: { label: 'Electrical & Inst.', tag: 'E&I', bg: 'bg-purple-100', text: 'text-purple-900' },
   };
 
@@ -365,7 +365,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 className="w-full bg-white border border-[#c4c6cf] rounded-xl px-3.5 py-2 text-xs text-[#191c1e] font-bold focus:border-[#002046] outline-none shadow-2xs"
               >
                 <option value="civil">Civil Engineering (Foundation, RCC, Shed)</option>
-                <option value="mechanical">Mechanical Piping (Valves, Equipment)</option>
+                <option value="mechanical">Mechanical Engineering (Equipment, Machinery, Piping)</option>
                 <option value="eni">Electrical & Instrumentation (Panels, Cables)</option>
               </select>
               <p className="text-[10px] text-[#545f72] mt-1">
@@ -382,7 +382,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
                 onChange={(e) => setSelectedCategory(e.target.value as Category)}
                 className="w-full bg-white border border-[#c4c6cf] rounded-xl px-3.5 py-2 text-xs text-[#191c1e] focus:border-[#002046] outline-none shadow-2xs"
               >
-                <option value="DRAWINGS">DRAWINGS (DWG / DXF / CAD / PDF)</option>
+                <option value="DRAWINGS">DRAWINGS (JPG / PNG / DWG / DXF / CAD / PDF)</option>
                 <option value="GRN">GRN (Goods Receipt Note)</option>
                 <option value="SRN">SRN (Service Receipt Note)</option>
                 <option value="PO">PO (Purchase Order)</option>
@@ -471,7 +471,7 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               <p className="text-xs text-[#545f72] mt-1 font-mono">
                 {uploadMode === 'folder'
                   ? 'Preserves sub-folder structure and uploads all files inside'
-                  : 'Supports DWG, DXF, PDF, DOCX, XLSX, PNG, ZIP'}
+                  : 'Supports JPG, PNG, DWG, DXF, PDF, DOCX, XLSX, ZIP'}
               </p>
 
               <div className="flex gap-2.5 mt-3.5">

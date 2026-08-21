@@ -5,10 +5,12 @@ import {
   ShieldCheck, 
   FolderOpen,
   Eye,
-  Edit2
+  FileImage,
+  UploadCloud,
+  Layers,
+  FileText
 } from 'lucide-react';
 import { StructureNode, Branch, AppView, R2ConnectionStatus } from '../types';
-import { DrawingCanvas } from './DrawingCanvas';
 import { BranchOverviewCards } from './BranchOverviewCards';
 import { formatBytes } from '../data/plantStructures';
 
@@ -32,6 +34,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Compute live totals
   const totalFilesCount = useMemo(() => {
     return nodes.reduce((acc, n) => acc + n.files.length, 0);
+  }, [nodes]);
+
+  const totalDrawingFilesCount = useMemo(() => {
+    return nodes.reduce((acc, n) => acc + n.files.filter(f => f.category === 'DRAWINGS').length, 0);
   }, [nodes]);
 
   const totalSizeBytes = useMemo(() => {
@@ -109,6 +115,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div className="bg-white border border-[#c4c6cf] p-4 rounded-2xl shadow-2xs">
           <span className="text-[10px] font-bold text-[#74777f] uppercase tracking-wider block">
+            Engineering Drawings
+          </span>
+          <div className="flex items-baseline gap-2 mt-1">
+            <span className="text-2xl font-bold font-mono text-[#002046]">
+              {totalDrawingFilesCount}
+            </span>
+            <span className="text-xs text-[#545f72]">JPG / PNG / CAD</span>
+          </div>
+        </div>
+
+        <div className="bg-white border border-[#c4c6cf] p-4 rounded-2xl shadow-2xs">
+          <span className="text-[10px] font-bold text-[#74777f] uppercase tracking-wider block">
             Storage Utilized
           </span>
           <div className="flex items-baseline gap-2 mt-1">
@@ -118,33 +136,47 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <span className="text-xs text-[#545f72]">Cloud R2</span>
           </div>
         </div>
-
-        <div className="bg-white border border-[#c4c6cf] p-4 rounded-2xl shadow-2xs">
-          <span className="text-[10px] font-bold text-[#74777f] uppercase tracking-wider block">
-            Security Status
-          </span>
-          <div className="flex items-center gap-1.5 mt-1 text-emerald-700">
-            <ShieldCheck className="w-5 h-5 text-emerald-600" />
-            <span className="text-sm font-bold font-mono">Protected</span>
-          </div>
-        </div>
       </div>
 
-      {/* DRAWING OPTION AT THE TOP OF DASHBOARD */}
-      <section className="space-y-2">
-        <div className="flex justify-between items-center px-1">
-          <div>
-            <h2 className="text-base font-bold text-[#002046] tracking-tight flex items-center gap-2">
-              <Edit2 className="w-4 h-4 text-[#002046]" />
-              <span>Technical Drawing & CAD Markup Suite</span>
-            </h2>
-            <p className="text-xs text-[#545f72]">
-              Interactive engineering markup canvas for field schematics, annotations, and blueprint drafting
-            </p>
+      {/* Engineering Drawing & Repository Quick Access Module */}
+      <section className="bg-white border border-[#c4c6cf] rounded-2xl p-5 shadow-2xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-[#d5e0f7] text-[#002046] flex items-center justify-center shrink-0">
+              <FileImage className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-[#002046] tracking-tight">
+                  Technical Drawings & Engineering Documents Repository
+                </h2>
+                <span className="px-2 py-0.5 rounded-md bg-[#e6e8ea] text-[#002046] text-[10px] font-mono font-bold uppercase">
+                  JPG • PNG • DWG • PDF
+                </span>
+              </div>
+              <p className="text-xs text-[#545f72] mt-0.5 max-w-3xl leading-relaxed">
+                Drawings and blueprints (JPG, PNG, DWG, DXF, PDF) along with GRN, SRN, PO, and SO files are securely stored across all 53 plant structures. To upload or manage drawings, access the <strong>Data Entry</strong> section.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 shrink-0">
+            <button
+              onClick={() => onViewChange('data-entry')}
+              className="px-4 py-2.5 bg-[#002046] hover:bg-[#1b365d] text-white rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer active:scale-98"
+            >
+              <UploadCloud className="w-4 h-4" />
+              <span>Upload Drawings (Data Entry)</span>
+            </button>
+            <button
+              onClick={() => onViewChange('files')}
+              className="px-4 py-2.5 bg-white hover:bg-[#f2f4f6] text-[#002046] border border-[#c4c6cf] rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span>Browse Repository</span>
+            </button>
           </div>
         </div>
-
-        <DrawingCanvas />
       </section>
 
       {/* Engineering Disciplines Overview */}
@@ -155,7 +187,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               Engineering Disciplines
             </h2>
             <p className="text-xs text-[#545f72]">
-              Civil, Mechanical, and Electrical & Instrumentation branches
+              Civil, Mechanical Engineering, and Electrical & Instrumentation branches
             </p>
           </div>
           <button
