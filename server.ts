@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import multer from 'multer';
 import { S3Client, PutObjectCommand, GetObjectCommand, HeadBucketCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
@@ -311,9 +312,27 @@ app.post('/api/r2/upload', upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'No file provided in form-data' });
     }
 
-    const { nodeCode, branch, category, drawingNumber, revision, uploadedBy, status, relativePath } = req.body;
-    const cleanFileName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const r2Key = `drawings/${nodeCode || 'GENERAL'}/${branch || 'civil'}/${category || 'DRAWINGS'}/${Date.now()}-${cleanFileName}`;
+    const { 
+      nodeCode, 
+      branch, 
+      category, 
+      drawingNumber, 
+      revision, 
+      uploadedBy, 
+      status, 
+      relativePath,
+      fileKey: customFileKey,
+      fileId: customFileId
+    } = req.body;
+
+    const pathOrName = relativePath || file.originalname;
+    const uniqueUUID = crypto.randomUUID();
+    // Unique fileKey per file using relativePath/name combined with crypto.randomUUID()
+    const fileKey = customFileKey || `${pathOrName}-${uniqueUUID}`;
+    const fileId = customFileId || `fl-${uniqueUUID}`;
+
+    const cleanFileKey = fileKey.replace(/[^a-zA-Z0-9._/-]/g, '_');
+    const r2Key = `drawings/${nodeCode || 'GENERAL'}/${branch || 'civil'}/${category || 'DRAWINGS'}/${cleanFileKey}`;
     let downloadUrl = `/api/r2/download/${path.basename(file.path)}`;
 
     const s3 = getR2Client();
@@ -348,13 +367,13 @@ app.post('/api/r2/upload', upload.single('file'), async (req, res) => {
     };
 
     const newFileRecord: StoredFile = {
-      id: `${nodeCode || 'ST'}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      name: relativePath || file.originalname,
+      id: fileId,
+      name: pathOrName,
       extension: ext,
       sizeBytes: file.size,
       sizeFormatted: formatBytes(file.size),
       uploadDate: new Date().toISOString().slice(0, 10),
-      uploadedBy: uploadedBy || 'chirag.maheswari@rbminfracon-kutchh.com',
+      uploadedBy: uploadedBy || 'Engineering Team',
       version: revision || 'Rev-A',
       status: (status as any) || 'verified',
       category: category || 'DRAWINGS',

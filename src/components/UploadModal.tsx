@@ -29,8 +29,20 @@ interface UploadModalProps {
 interface SelectedUploadItem {
   file: File;
   relativePath: string;
+  fileKey?: string;
+  fileId?: string;
   folderName?: string;
 }
+
+const generateUniqueFileKey = (file: File, relativePath?: string) => {
+  const pathOrName = relativePath || (file as any).webkitRelativePath || file.name;
+  const uuid = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  const fileKey = `${pathOrName}-${uuid}`;
+  const fileId = `fl-${uuid}`;
+  return { pathOrName, fileKey, fileId };
+};
 
 export const UploadModal: React.FC<UploadModalProps> = ({
   isOpen,
@@ -86,7 +98,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       return new Promise((resolve) => {
         entry.file((file: File) => {
           const relPath = basePath ? `${basePath}/${file.name}` : file.name;
-          resolve([{ file, relativePath: relPath, folderName: rootFolder || undefined }]);
+          const { fileKey, fileId } = generateUniqueFileKey(file, relPath);
+          resolve([{ 
+            file, 
+            relativePath: relPath, 
+            fileKey,
+            fileId,
+            folderName: rootFolder || undefined 
+          }]);
         });
       });
     } else if (entry.isDirectory) {
@@ -147,10 +166,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const files = Array.from(e.dataTransfer.files) as File[];
       setUploadItems(
-        files.map(f => ({
-          file: f,
-          relativePath: f.name,
-        }))
+        files.map(f => {
+          const { fileKey, fileId } = generateUniqueFileKey(f, f.name);
+          return {
+            file: f,
+            relativePath: f.name,
+            fileKey,
+            fileId,
+          };
+        })
       );
     }
   };
@@ -159,10 +183,15 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files) as File[];
       setUploadItems(
-        files.map(f => ({
-          file: f,
-          relativePath: f.name,
-        }))
+        files.map(f => {
+          const { fileKey, fileId } = generateUniqueFileKey(f, f.name);
+          return {
+            file: f,
+            relativePath: f.name,
+            fileKey,
+            fileId,
+          };
+        })
       );
     }
   };
@@ -173,9 +202,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       const items: SelectedUploadItem[] = files.map(f => {
         const relPath = (f as any).webkitRelativePath || f.name;
         const topFolder = relPath.includes('/') ? relPath.split('/')[0] : 'Folder';
+        const { fileKey, fileId } = generateUniqueFileKey(f, relPath);
         return {
           file: f,
           relativePath: relPath,
+          fileKey,
+          fileId,
           folderName: topFolder,
         };
       });
@@ -198,8 +230,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         const item = uploadItems[i];
         setCurrentUploadingFileName(item.relativePath);
 
+        const { fileKey, fileId } = item.fileKey && item.fileId
+          ? { fileKey: item.fileKey, fileId: item.fileId }
+          : generateUniqueFileKey(item.file, item.relativePath);
+
         const formData = new FormData();
         formData.append('file', item.file);
+        formData.append('fileKey', fileKey);
+        formData.append('fileId', fileId);
         formData.append('nodeCode', selectedNodeCode);
         formData.append('branch', selectedBranch);
         formData.append('category', selectedCategory);
@@ -229,10 +267,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         if (data.file) {
           onUploadFile(selectedNodeCode, data.file);
         } else {
-          // Fallback client structure
+          // Fallback client structure with unique ID
           const extension = item.file.name.split('.').pop()?.toLowerCase() || 'dwg';
           const newDoc: NodeFile = {
-            id: `fl-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+            id: fileId,
             name: item.relativePath,
             extension,
             sizeBytes: item.file.size,
