@@ -21,7 +21,7 @@ interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   nodes: StructureNode[];
-  onUploadFile: (nodeCode: string, newFile: NodeFile) => void;
+  onUploadFile: (nodeCode: string, newFileOrFiles: NodeFile | NodeFile[]) => void;
   defaultNodeCode?: string;
   defaultBranch?: Branch;
 }
@@ -39,7 +39,8 @@ const generateUniqueFileKey = (file: File, relativePath?: string) => {
   const uuid = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  const fileKey = `${pathOrName}-${uuid}`;
+  // Unique file key using crypto.randomUUID() + '-' + file.name
+  const fileKey = `${uuid}-${pathOrName}`;
   const fileId = `fl-${uuid}`;
   return { pathOrName, fileKey, fileId };
 };
@@ -226,6 +227,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
     setErrorMessage('');
 
     try {
+      const allUploadedFiles: NodeFile[] = [];
+
       for (let i = 0; i < uploadItems.length; i++) {
         const item = uploadItems[i];
         setCurrentUploadingFileName(item.relativePath);
@@ -264,8 +267,10 @@ export const UploadModal: React.FC<UploadModalProps> = ({
         }
 
         const data = await response.json();
-        if (data.file) {
-          onUploadFile(selectedNodeCode, data.file);
+        if (data.files && Array.isArray(data.files)) {
+          allUploadedFiles.push(...data.files);
+        } else if (data.file) {
+          allUploadedFiles.push(data.file);
         } else {
           // Fallback client structure with unique ID
           const extension = item.file.name.split('.').pop()?.toLowerCase() || 'dwg';
@@ -284,8 +289,13 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             drawingNumber: drawingNumber || `DWG-${selectedNodeCode}-${Date.now().toString().slice(-4)}`,
             revision: revision || 'Rev-A',
           };
-          onUploadFile(selectedNodeCode, newDoc);
+          allUploadedFiles.push(newDoc);
         }
+      }
+
+      // Insert/update all uploaded files into frontend state in one atomic update
+      if (allUploadedFiles.length > 0) {
+        onUploadFile(selectedNodeCode, allUploadedFiles);
       }
 
       setUploadProgress(100);

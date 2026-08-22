@@ -88,28 +88,34 @@ export default function App() {
   }, [nodes]);
 
   // Handlers
-  const handleUploadFile = async (nodeCode: string, newFile: NodeFile) => {
-    const updated = nodes.map(node => {
-      if (node.code === nodeCode) {
-        return {
-          ...node,
-          files: [newFile, ...node.files]
-        };
-      }
-      return node;
-    });
+  const handleUploadFile = async (nodeCode: string, newFileOrFiles: NodeFile | NodeFile[]) => {
+    const fileArray = Array.isArray(newFileOrFiles) ? newFileOrFiles : [newFileOrFiles];
+    if (fileArray.length === 0) return;
 
-    setNodes(updated);
+    setNodes(prevNodes => {
+      const updated = prevNodes.map(node => {
+        if (node.code === nodeCode) {
+          const newIds = new Set(fileArray.map(f => f.id));
+          const existingFiles = node.files.filter(f => !newIds.has(f.id));
+          return {
+            ...node,
+            files: [...fileArray, ...existingFiles],
+          };
+        }
+        return node;
+      });
 
-    try {
-      await fetch('/api/nodes', {
+      // Synchronize with backend API
+      fetch('/api/nodes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodes: updated }),
+      }).catch(e => {
+        console.warn('Server sync failed', e);
       });
-    } catch (e) {
-      console.warn('Server sync failed', e);
-    }
+
+      return updated;
+    });
   };
 
   const handleDeleteFile = async (nodeCode: string, fileId: string) => {

@@ -304,12 +304,12 @@ app.post('/api/r2/presigned-upload-url', async (req, res) => {
   }
 });
 
-// 4. Multipart direct upload handler (supporting both direct S3 pipe and local storage)
-app.post('/api/r2/upload', upload.single('file'), async (req, res) => {
+// 4. Multipart direct upload handler (supporting single and multiple file uploads, direct S3 pipe, and local storage)
+app.post('/api/r2/upload', upload.any(), async (req, res) => {
   try {
-    const file = req.file;
-    if (!file) {
-      return res.status(400).json({ error: 'No file provided in form-data' });
+    const rawFiles = (req.files as Express.Multer.File[]) || (req.file ? [req.file] : []);
+    if (!rawFiles || rawFiles.length === 0) {
+      return res.status(400).json({ error: 'No files provided in form-data' });
     }
 
     const { 
@@ -322,42 +322,22 @@ app.post('/api/r2/upload', upload.single('file'), async (req, res) => {
       status, 
       relativePath,
       fileKey: customFileKey,
-      fileId: customFileId
+      fileId: customFileId,
+      relativePaths
     } = req.body;
 
-    const pathOrName = relativePath || file.originalname;
-    const uniqueUUID = crypto.randomUUID();
-    // Unique fileKey per file using relativePath/name combined with crypto.randomUUID()
-    const fileKey = customFileKey || `${pathOrName}-${uniqueUUID}`;
-    const fileId = customFileId || `fl-${uniqueUUID}`;
-
-    const cleanFileKey = fileKey.replace(/[^a-zA-Z0-9._/-]/g, '_');
-    const r2Key = `drawings/${nodeCode || 'GENERAL'}/${branch || 'civil'}/${category || 'DRAWINGS'}/${cleanFileKey}`;
-    let downloadUrl = `/api/r2/download/${path.basename(file.path)}`;
-
-    const s3 = getR2Client();
-    if (s3 && currentR2Config.bucketName) {
+    let relativePathsMap: Record<string, string> = {};
+    if (typeof relativePaths === 'string') {
       try {
-        const fileBuffer = fs.readFileSync(file.path);
-        const putCmd = new PutObjectCommand({
-          Bucket: currentR2Config.bucketName,
-          Key: r2Key,
-          Body: fileBuffer,
-          ContentType: file.mimetype || 'application/octet-stream',
-        });
-        await s3.send(putCmd);
-
-        if (currentR2Config.publicUrl) {
-          downloadUrl = `${currentR2Config.publicUrl.replace(/\/$/, '')}/${r2Key}`;
-        } else {
-          downloadUrl = `/api/r2/download-key?key=${encodeURIComponent(r2Key)}`;
-        }
-      } catch (s3Err) {
-        console.warn('R2 Put failed, continuing with local storage fallback:', s3Err);
+        relativePathsMap = JSON.parse(relativePaths);
+      } catch (e) {
+        // ignore parse error
       }
     }
 
-    const ext = (file.originalname.split('.').pop() || 'dwg').toLowerCase();
+    const s3 = getR2Client();
+    const uploadedFileRecords: StoredFile[] = [];
+
     const formatBytes = (bytes: number) => {
       if (bytes === 0) return '0 B';
       const k = 1024;
@@ -366,37 +346,104 @@ app.post('/api/r2/upload', upload.single('file'), async (req, res) => {
       return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     };
 
-    const newFileRecord: StoredFile = {
-      id: fileId,
-      name: pathOrName,
-      extension: ext,
-      sizeBytes: file.size,
-      sizeFormatted: formatBytes(file.size),
-      uploadDate: new Date().toISOString().slice(0, 10),
-      uploadedBy: uploadedBy || 'Engineering Team',
-      version: revision || 'Rev-A',
-      status: (status as any) || 'verified',
-      category: category || 'DRAWINGS',
-      branch: branch || 'civil',
-      drawingNumber: drawingNumber || '',
-      revision: revision || 'Rev-A',
-      r2Key,
-      downloadUrl,
-      localPath: file.path,
-    };
+    for (let i = 0; i < rawFiles.length; i++) {
+      const file = rawFiles[i];
+      const origName = file.originalname;
+      const fileRelativePath = relativePathsMap[origName] || (rawFiles.length === 1 ? relativePath : '') || origName;
 
-    if (nodeCode) {
+      // Unique file key for EVERY file using crypto.randomUUID() + '-' + file.name
+      const uniqueUUID = crypto.randomUUID();
+      const fileKey = customFileKey && rawFiles.length === 1
+        ? customFileKey
+        : `${uniqueUUID}-${origName}`;
+      const fileId = customFileId && rawFiles.length === 1
+        ? customFileId
+        : `fl-${uniqueUUID}`;
+
+      const cleanFileKey = fileKey.replace(/[^a-zA-Z0-9._/-]/g, '_');
+      const r2Key = `drawings/${nodeCode || 'GENERAL'}/${branch || 'civil'}/${category || 'DRAWINGS'}/${cleanFileKey}`;
+      let downloadUrl = `/api/r2/download/${path.basename(file.path)}`;
+
+      // Upload each file individually to Cloudflare R2
+      if (s3 && currentR2Config.bucketName) {
+        try {
+          const fileBuffer = fs.readFileSync(file.path);
+          const putCmd = new PutObjectCommand({
+            Bucket: currentR2Config.bucketName,
+            Key: r2Key,
+            Body: fileBuffer,
+            ContentType: file.mimetype || 'application/octet-stream',
+          });
+          await s3.send(putCmd);
+
+          if (currentR2Config.publicUrl) {
+            downloadUrl = `${currentR2Config.publicUrl.replace(/\/$/, '')}/${r2Key}`;
+          } else {
+            downloadUrl = `/api/r2/download-key?key=${encodeURIComponent(r2Key)}`;
+          }
+        } catch (s3Err) {
+          console.warn(`R2 Put failed for ${origName}, continuing with local storage fallback:`, s3Err);
+        }
+      }
+
+      const ext = (origName.split('.').pop() || 'dwg').toLowerCase();
+      const docNumber = drawingNumber
+        ? (rawFiles.length > 1 ? `${drawingNumber}-${String(i + 1).padStart(3, '0')}` : drawingNumber)
+        : `DWG-${(branch || 'civil').toUpperCase().slice(0, 3)}-${nodeCode || 'ST'}-${Date.now().toString().slice(-4)}-${String(i + 1).padStart(2, '0')}`;
+
+      const newFileRecord: StoredFile = {
+        id: fileId,
+        name: fileRelativePath,
+        extension: ext,
+        sizeBytes: file.size,
+        sizeFormatted: formatBytes(file.size),
+        uploadDate: new Date().toISOString().slice(0, 10),
+        uploadedBy: uploadedBy || 'Engineering Team',
+        version: revision || 'Rev-A',
+        status: (status as any) || 'verified',
+        category: category || 'DRAWINGS',
+        branch: branch || 'civil',
+        drawingNumber: docNumber,
+        revision: revision || 'Rev-A',
+        r2Key,
+        downloadUrl,
+        localPath: file.path,
+      };
+
+      uploadedFileRecords.push(newFileRecord);
+    }
+
+    // Insert all uploaded files into database/state without overwriting existing records
+    if (nodeCode && uploadedFileRecords.length > 0) {
       if (!structureFiles[nodeCode]) {
         structureFiles[nodeCode] = [];
       }
-      structureFiles[nodeCode].unshift(newFileRecord);
+      const existingIds = new Set(structureFiles[nodeCode].map(f => f.id));
+      const filteredNew = uploadedFileRecords.filter(f => !existingIds.has(f.id));
+      structureFiles[nodeCode] = [...filteredNew, ...structureFiles[nodeCode]];
       saveServerFiles(structureFiles);
+
+      // Keep serverNodes in sync
+      if (Array.isArray(serverNodes) && serverNodes.length > 0) {
+        serverNodes = serverNodes.map((n: any) => {
+          if (n.code === nodeCode) {
+            return {
+              ...n,
+              files: structureFiles[nodeCode]
+            };
+          }
+          return n;
+        });
+        saveServerNodes(serverNodes);
+      }
     }
 
     return res.json({
       success: true,
-      file: newFileRecord,
-      message: 'File successfully uploaded and indexed in Document Portal',
+      files: uploadedFileRecords,
+      file: uploadedFileRecords[0],
+      count: uploadedFileRecords.length,
+      message: `${uploadedFileRecords.length} file(s) successfully uploaded and indexed in Document Portal`,
     });
   } catch (err: any) {
     console.error('Upload handler error:', err);
@@ -443,21 +490,45 @@ app.get('/api/structures/files', (req, res) => {
   res.json(structureFiles);
 });
 
-// 8. Add a file record
+// 8. Add a file record or batch file records
 app.post('/api/structures/file', (req, res) => {
-  const { nodeCode, file } = req.body;
-  if (!nodeCode || !file) {
-    return res.status(400).json({ error: 'nodeCode and file object are required' });
+  const { nodeCode, file, files } = req.body;
+  const itemsToAdd: StoredFile[] = Array.isArray(files)
+    ? files
+    : Array.isArray(file)
+    ? file
+    : file
+    ? [file]
+    : [];
+
+  if (!nodeCode || itemsToAdd.length === 0) {
+    return res.status(400).json({ error: 'nodeCode and file/files are required' });
   }
 
   if (!structureFiles[nodeCode]) {
     structureFiles[nodeCode] = [];
   }
 
-  structureFiles[nodeCode].unshift(file);
+  const existingIds = new Set(structureFiles[nodeCode].map(f => f.id));
+  const newUnique = itemsToAdd.filter(f => !existingIds.has(f.id));
+  structureFiles[nodeCode] = [...newUnique, ...structureFiles[nodeCode]];
   saveServerFiles(structureFiles);
 
-  res.json({ success: true, files: structureFiles[nodeCode] });
+  // Keep serverNodes in sync
+  if (Array.isArray(serverNodes) && serverNodes.length > 0) {
+    serverNodes = serverNodes.map((n: any) => {
+      if (n.code === nodeCode) {
+        return {
+          ...n,
+          files: structureFiles[nodeCode],
+        };
+      }
+      return n;
+    });
+    saveServerNodes(serverNodes);
+  }
+
+  res.json({ success: true, files: structureFiles[nodeCode], addedCount: newUnique.length });
 });
 
 // 9. Delete a file record
