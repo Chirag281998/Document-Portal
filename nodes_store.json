@@ -1,0 +1,426 @@
+[
+  {
+    "id": "001",
+    "code": "ST-1",
+    "name": "REFINERY PLANT",
+    "fullTag": "ST-1-REFINERY PLANT",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "002",
+    "code": "ST-2",
+    "name": "OLEO PLANT",
+    "fullTag": "ST-2-OLEO PLANT",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "003",
+    "code": "ST-3",
+    "name": "PACKING PLANT",
+    "fullTag": "ST-3-PACKING PLANT",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "004",
+    "code": "ST-4",
+    "name": "BOILER",
+    "fullTag": "ST-4-BOILER",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "005",
+    "code": "ST-5",
+    "name": "CHIMNEY",
+    "fullTag": "ST-5-CHIMNEY",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "006",
+    "code": "ST-6",
+    "name": "COAL HANDLING SYSTEM",
+    "fullTag": "ST-6-COAL HANDLING SYSTEM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "007",
+    "code": "ST-7",
+    "name": "COAL YARD",
+    "fullTag": "ST-7-COAL YARD",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "008",
+    "code": "ST-8",
+    "name": "TG BUILDING",
+    "fullTag": "ST-8-TG BUILDING",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "009",
+    "code": "ST-9",
+    "name": "AOP TANK FARM",
+    "fullTag": "ST-9-AOP TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "010",
+    "code": "ST-10",
+    "name": "BAKERY TANK FARM",
+    "fullTag": "ST-10-BAKERY TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "011",
+    "code": "ST-11",
+    "name": "BEADING TANK FARM",
+    "fullTag": "ST-11-BEADING TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "012",
+    "code": "ST-12",
+    "name": "CHEMICALS TANK FARM",
+    "fullTag": "ST-12-CHEMICALS TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "013",
+    "code": "ST-13",
+    "name": "CPO TANK FARM",
+    "fullTag": "ST-13-CPO TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "014",
+    "code": "ST-14",
+    "name": "IE TANK FARM",
+    "fullTag": "ST-14-IE TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "015",
+    "code": "ST-15",
+    "name": "OLEO TANK FARM",
+    "fullTag": "ST-15-OLEO TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "016",
+    "code": "ST-16",
+    "name": "PACKING TANK FARM",
+    "fullTag": "ST-16-PACKING TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "017",
+    "code": "ST-17",
+    "name": "PKO TANK FARM",
+    "fullTag": "ST-17-PKO TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "018",
+    "code": "ST-18",
+    "name": "SOYA TANK FARM",
+    "fullTag": "ST-18-SOYA TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "019",
+    "code": "ST-19",
+    "name": "SUNFLOWER TANK FARM",
+    "fullTag": "ST-19-SUNFLOWER TANK FARM",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "020",
+    "code": "ST-20",
+    "name": "HYDROGENATION PLANT",
+    "fullTag": "ST-20-HYDROGENATION PLANT",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "021",
+    "code": "ST-21",
+    "name": "PKO PLANT",
+    "fullTag": "ST-21-PKO PLANT",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "022",
+    "code": "ST-22",
+    "name": "SILO",
+    "fullTag": "ST-22-SILO",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "023",
+    "code": "ST-23",
+    "name": "WATER TANK",
+    "fullTag": "ST-23-WATER TANK",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "024",
+    "code": "ST-24",
+    "name": "WTP",
+    "fullTag": "ST-24-WTP",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "025",
+    "code": "ST-25",
+    "name": "ETP",
+    "fullTag": "ST-25-ETP",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "026",
+    "code": "ST-26",
+    "name": "STP",
+    "fullTag": "ST-26-STP",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "027",
+    "code": "ST-27",
+    "name": "WEIGHBRIDGE",
+    "fullTag": "ST-27-WEIGHBRIDGE",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "028",
+    "code": "ST-28",
+    "name": "OLEO WAREHOUSE",
+    "fullTag": "ST-28-OLEO WAREHOUSE",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "029",
+    "code": "ST-29",
+    "name": "SPRAY COOLER PLANT",
+    "fullTag": "ST-29-SPRAY COOLER PLANT",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "030",
+    "code": "ST-30",
+    "name": "SOAP PLANT",
+    "fullTag": "ST-30-SOAP PLANT",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "031",
+    "code": "ST-31",
+    "name": "ACID OIL PLANT",
+    "fullTag": "ST-31-ACID OIL PLANT",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "032",
+    "code": "ST-32",
+    "name": "IE PLANT",
+    "fullTag": "ST-32-IE PLANT",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "033",
+    "code": "ST-33",
+    "name": "PIPE RACK",
+    "fullTag": "ST-33-PIPE RACK",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "034",
+    "code": "ST-34",
+    "name": "SWITCH YARD",
+    "fullTag": "ST-34-SWITCH YARD",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "035",
+    "code": "ST-35",
+    "name": "SPENT EARTH & CATALYST STORE",
+    "fullTag": "ST-35-SPENT EARTH & CATALYST STORE",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "036",
+    "code": "ST-36",
+    "name": "HSD STORAGE",
+    "fullTag": "ST-36-HSD STORAGE",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "037",
+    "code": "ST-37",
+    "name": "RM AND FG LOADING & UNLOADING",
+    "fullTag": "ST-37-RM AND FG LOADING & UNLOADING",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "038",
+    "code": "ST-38",
+    "name": "PUMP HOUSE",
+    "fullTag": "ST-38-PUMP HOUSE",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "039",
+    "code": "ST-39",
+    "name": "PLANT UTILITY",
+    "fullTag": "ST-39-PLANT UTILITY",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "040",
+    "code": "ST-40",
+    "name": "GATE COMPLEX",
+    "fullTag": "ST-40-GATE COMPLEX",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "041",
+    "code": "ST-41",
+    "name": "COMPOUND WALL",
+    "fullTag": "ST-41-COMPOUND WALL",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "042",
+    "code": "ST-42",
+    "name": "ROAD",
+    "fullTag": "ST-42-ROAD",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "043",
+    "code": "ST-43",
+    "name": "DRAIN",
+    "fullTag": "ST-43-DRAIN",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "044",
+    "code": "ST-44",
+    "name": "FOOTPATH",
+    "fullTag": "ST-44-FOOTPATH",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "045",
+    "code": "ST-45",
+    "name": "TOILET BLOCK",
+    "fullTag": "ST-45-TOILET BLOCK",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "046",
+    "code": "ST-46",
+    "name": "ADMIN BUILDING",
+    "fullTag": "ST-46-ADMIN BUILDING",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "047",
+    "code": "ST-47",
+    "name": "WORKERS ENTRY",
+    "fullTag": "ST-47-WORKERS ENTRY",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "048",
+    "code": "ST-48",
+    "name": "WATCH TOWER",
+    "fullTag": "ST-48-WATCH TOWER",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "049",
+    "code": "ST-49",
+    "name": "WAREHOUSE",
+    "fullTag": "ST-49-WAREHOUSE",
+    "isHighlighted": true,
+    "files": []
+  },
+  {
+    "id": "050",
+    "code": "ST-50",
+    "name": "2-POLE STRUCTURE",
+    "fullTag": "ST-50-2-POLE STRUCTURE",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "051",
+    "code": "ST-51",
+    "name": "GARDEN WALL",
+    "fullTag": "ST-51-GARDEN WALL",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "052",
+    "code": "ST-52",
+    "name": "STORE",
+    "fullTag": "ST-52-STORE",
+    "isHighlighted": false,
+    "files": []
+  },
+  {
+    "id": "053",
+    "code": "ST-53",
+    "name": "STREET LIGHT/HIGH MAST",
+    "fullTag": "ST-53-STREET LIGHT/HIGH MAST",
+    "isHighlighted": false,
+    "files": []
+  }
+]

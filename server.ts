@@ -268,6 +268,7 @@ function getR2Client(): S3Client | null {
       accessKeyId: currentR2Config.accessKeyId,
       secretAccessKey: currentR2Config.secretAccessKey,
     },
+    maxAttempts: 2,
   });
 }
 
