@@ -272,6 +272,87 @@ function getR2Client(): S3Client | null {
   });
 }
 
+function fileNameFromR2Key(key: string): string {
+  const keyName = key.split('/').pop() || key;
+  return keyName.replace(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/, '');
+}
+
+async function listR2Files(): Promise<StoredFile[]> {
+  const s3 = getR2Client();
+  if (!s3 || !currentR2Config.bucketName) {
+    return [];
+  }
+
+  const files: StoredFile[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const result = await s3.send(new ListObjectsV2Command({
+      Bucket: currentR2Config.bucketName,
+      Prefix: 'drawings/',
+      ContinuationToken: continuationToken,
+    }));
+
+    for (const object of result.Contents || []) {
+      if (!object.Key || object.Size === undefined) continue;
+
+      const [, nodeCode, branch, category, ...keyParts] = object.Key.split('/');
+      if (!nodeCode || !branch || !category || keyParts.length === 0) continue;
+
+      const name = fileNameFromR2Key(object.Key);
+      const extension = (name.split('.').pop() || 'dwg').toLowerCase();
+      const uploadDate = (object.LastModified || new Date()).toISOString().slice(0, 10);
+      const idMatch = keyParts[0].match(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-/i);
+      const id = idMatch ? `fl-${idMatch[1]}` : `r2-${Buffer.from(object.Key).toString('base64url')}`;
+
+      files.push({
+        id,
+        name,
+        extension,
+        sizeBytes: object.Size,
+        sizeFormatted: formatBytes(object.Size),
+        uploadDate,
+        uploadedBy: 'Engineering Team',
+        version: 'Rev-A',
+        status: 'verified',
+        category,
+        branch,
+        branchId: branch,
+        nodeCode,
+        drawingNumber: `R2-${nodeCode}`,
+        revision: 'Rev-A',
+        r2Key: object.Key,
+        downloadUrl: currentR2Config.publicUrl
+          ? `${currentR2Config.publicUrl.replace(/\/$/, '')}/${object.Key}`
+          : `/api/r2/download-key?key=${encodeURIComponent(object.Key)}`,
+      });
+    }
+
+    continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return files;
+}
+
+async function getNodesWithR2Files(): Promise<StructureNode[]> {
+  const r2Files = await listR2Files();
+  if (r2Files.length === 0 && (!getR2Client() || !currentR2Config.bucketName)) {
+    return globalNodes;
+  }
+
+  const filesByNode = new Map<string, StoredFile[]>();
+  r2Files.forEach(file => {
+    const nodeFiles = filesByNode.get(file.nodeCode) || [];
+    nodeFiles.push(file);
+    filesByNode.set(file.nodeCode, nodeFiles);
+  });
+
+  return globalNodes.map(node => ({
+    ...node,
+    files: filesByNode.get(node.code) || [],
+  }));
+}
+
 // ----------------------------------------------------
 // REST API ENDPOINTS
 // ----------------------------------------------------
@@ -282,18 +363,19 @@ app.get('/api/health', (req, res) => {
 });
 
 // 2. GET /api/nodes - Master structures & associated files
-app.get('/api/nodes', (req, res) => {
+app.get('/api/nodes', async (req, res) => {
   try {
-    const totalFiles = globalNodes.reduce((acc, n) => acc + (n.files?.length || 0), 0);
-    const totalSizeBytes = globalNodes.reduce(
+    const nodes = await getNodesWithR2Files();
+    const totalFiles = nodes.reduce((acc, n) => acc + (n.files?.length || 0), 0);
+    const totalSizeBytes = nodes.reduce(
       (acc, n) => acc + (n.files || []).reduce((sub, f) => sub + (f.sizeBytes || 0), 0),
       0
     );
 
     res.json({
       success: true,
-      nodes: globalNodes,
-      totalCount: globalNodes.length,
+      nodes,
+      totalCount: nodes.length,
       totalFiles,
       totalSizeBytes,
       totalSizeFormatted: formatBytes(totalSizeBytes),
@@ -320,20 +402,14 @@ app.post('/api/nodes', (req, res) => {
 });
 
 // 4. GET /api/files - Query all files across all structures with optional filtering
-app.get('/api/files', (req, res) => {
+app.get('/api/files', async (req, res) => {
   try {
     const { branch, category, nodeCode, search } = req.query;
 
-    let allFiles: StoredFile[] = [];
-    globalNodes.forEach(node => {
-      if (nodeCode && node.code !== nodeCode) return;
-      (node.files || []).forEach(f => {
-        allFiles.push({
-          ...f,
-          nodeCode: node.code,
-        });
-      });
-    });
+    const nodes = await getNodesWithR2Files();
+    let allFiles: StoredFile[] = nodes
+      .filter(node => !nodeCode || node.code === nodeCode)
+      .flatMap(node => node.files || []);
 
     if (branch && typeof branch === 'string' && branch !== 'ALL') {
       const bTarget = branch.toLowerCase();
@@ -510,14 +586,15 @@ app.delete('/api/structures/:nodeCode/files/:fileId', async (req, res) => {
 });
 
 // 7. GET /api/branches - Branch tree and discipline storage stats
-app.get('/api/branches', (req, res) => {
+app.get('/api/branches', async (req, res) => {
   try {
     const branches: Branch[] = ['civil', 'mechanical', 'eni'];
+    const nodes = await getNodesWithR2Files();
     const branchStats = branches.map(b => {
       const branchFiles: StoredFile[] = [];
       const activeStructures = new Set<string>();
 
-      globalNodes.forEach(node => {
+      nodes.forEach(node => {
         (node.files || []).forEach(f => {
           if (f.branch === b || f.branchId === b) {
             branchFiles.push(f);
@@ -542,7 +619,7 @@ app.get('/api/branches', (req, res) => {
         sizeBytes,
         sizeFormatted: formatBytes(sizeBytes),
         activeNodesCount: activeStructures.size,
-        totalStructures: globalNodes.length,
+        totalStructures: nodes.length,
       };
     });
 
@@ -640,8 +717,9 @@ app.delete('/api/nodes/:nodeCode/category/:category', (req, res) => {
 });
 
 // 10. GET /api/storage-stats - Real-time global storage usage & discipline breakdown
-app.get('/api/storage-stats', (req, res) => {
+app.get('/api/storage-stats', async (req, res) => {
   try {
+    const nodes = await getNodesWithR2Files();
     let totalFiles = 0;
     let totalDrawingFiles = 0;
     let totalSizeBytes = 0;
@@ -658,7 +736,7 @@ app.get('/api/storage-stats', (req, res) => {
       eni: new Set(),
     };
 
-    globalNodes.forEach(node => {
+    nodes.forEach(node => {
       (node.files || []).forEach(f => {
         totalFiles++;
         totalSizeBytes += f.sizeBytes || 0;
@@ -694,7 +772,7 @@ app.get('/api/storage-stats', (req, res) => {
       totalSizeBytes,
       totalSizeFormatted: formatBytes(totalSizeBytes),
       branches: branchBreakdown,
-      structuresCount: globalNodes.length,
+      structuresCount: nodes.length,
       r2Configured: isR2Configured,
       r2Bucket: currentR2Config.bucketName || '',
     });
