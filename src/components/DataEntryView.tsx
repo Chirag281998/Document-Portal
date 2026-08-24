@@ -145,11 +145,11 @@ export const DataEntryView: React.FC<DataEntryViewProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nodes }),
       });
+      showToast('MASTER REPOSITORY SAVED', 'Structure manifest & cloud file indexes synchronized to central server.');
     } catch (e) {
-      console.warn('Sync to server completed client-side', e);
+      console.warn('Sync to server failed', e);
+      showToast('SYNC WARNING', 'Could not reach central server. Check connection.');
     }
-    localStorage.setItem('eng_docs_master_nodes', JSON.stringify(nodes));
-    showToast('MASTER REPOSITORY SAVED', 'Structure manifest & cloud file indexes synchronized successfully.');
   };
 
   const handleDownloadFile = (file: NodeFile, nodeCode: string) => {
@@ -201,7 +201,6 @@ export const DataEntryView: React.FC<DataEntryViewProps> = ({
         return n;
       });
       onUpdateNodes(updated);
-      localStorage.setItem('eng_docs_master_nodes', JSON.stringify(updated));
     }
 
     showToast('DOCUMENT DELETED', `Removed ${file.name} from ${nodeCode}.`);
@@ -229,17 +228,6 @@ export const DataEntryView: React.FC<DataEntryViewProps> = ({
     });
 
     onUpdateNodes(updated);
-    localStorage.setItem('eng_docs_master_nodes', JSON.stringify(updated));
-
-    try {
-      fetch('/api/nodes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodes: updated }),
-      });
-    } catch (e) {
-      // client fallback
-    }
 
     showToast(
       'DOCUMENTS CLEARED',
@@ -263,17 +251,6 @@ export const DataEntryView: React.FC<DataEntryViewProps> = ({
         files: n.files.filter(f => f.branch !== branch)
       }));
       onUpdateNodes(updated);
-      localStorage.setItem('eng_docs_master_nodes', JSON.stringify(updated));
-
-      try {
-        fetch('/api/nodes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nodes: updated }),
-        });
-      } catch (e) {
-        // client fallback
-      }
     }
 
     showToast(

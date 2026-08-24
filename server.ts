@@ -4,22 +4,34 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import multer from 'multer';
-import { S3Client, PutObjectCommand, GetObjectCommand, HeadBucketCommand, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { 
+  S3Client, 
+  PutObjectCommand, 
+  GetObjectCommand, 
+  HeadBucketCommand, 
+  ListObjectsV2Command, 
+  DeleteObjectCommand 
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ extended: true, limit: '100mb' }));
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 
-// In-memory or fallback local storage folder for large uploads when R2 is in setup phase
+// Directories setup
+const DATA_DIR = path.join(process.cwd(), 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
 const UPLOADS_DIR = path.join(process.cwd(), 'local_storage');
 if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-// Multer disk storage for local buffer / direct upload
+// Multer disk storage configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, UPLOADS_DIR);
@@ -30,13 +42,49 @@ const storage = multer.diskStorage({
     cb(null, `${file.fieldname}-${uniqueSuffix}${ext}`);
   }
 });
+
 const upload = multer({
   storage,
   limits: { fileSize: 4 * 1024 * 1024 * 1024 } // 4GB max file size
 });
 
-// Runtime Cloudflare R2 configuration
-interface R2Config {
+// ----------------------------------------------------
+// DATA TYPES & PERSISTENCE SCHEMAS
+// ----------------------------------------------------
+export type Branch = 'civil' | 'mechanical' | 'eni';
+export type Category = 'DRAWINGS' | 'GRN' | 'SRN' | 'PO' | 'SO';
+
+export interface StoredFile {
+  id: string;
+  name: string;
+  extension: string;
+  sizeBytes: number;
+  sizeFormatted: string;
+  uploadDate: string;
+  uploadedBy: string;
+  version: string;
+  status: 'verified' | 'pending' | 'critical';
+  category: Category | string;
+  branch: Branch | string;
+  branchId?: Branch | string;
+  nodeCode: string;
+  drawingNumber?: string;
+  revision?: string;
+  r2Key?: string;
+  downloadUrl?: string;
+  localPath?: string;
+}
+
+export interface StructureNode {
+  id: string;
+  code: string;
+  name: string;
+  fullTag: string;
+  isHighlighted: boolean;
+  files: StoredFile[];
+}
+
+export interface R2Config {
   accountId: string;
   accessKeyId: string;
   secretAccessKey: string;
@@ -44,13 +92,165 @@ interface R2Config {
   publicUrl: string;
 }
 
-let currentR2Config: R2Config = {
-  accountId: process.env.R2_ACCOUNT_ID || '',
-  accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
-  bucketName: process.env.R2_BUCKET_NAME || '',
-  publicUrl: process.env.R2_PUBLIC_URL || '',
-};
+const R2_CONFIG_FILE = path.join(DATA_DIR, 'r2_config.json');
+const PLANT_DATABASE_FILE = path.join(DATA_DIR, 'plant_database.json');
+
+// Canonical 53 Plant Structures Seed List
+const SEED_STRUCTURES: { code: string; name: string; isHighlighted: boolean }[] = [
+  { code: 'ST-1', name: 'REFINERY PLANT', isHighlighted: true },
+  { code: 'ST-2', name: 'OLEO PLANT', isHighlighted: true },
+  { code: 'ST-3', name: 'PACKING PLANT', isHighlighted: true },
+  { code: 'ST-4', name: 'BOILER', isHighlighted: true },
+  { code: 'ST-5', name: 'CHIMNEY', isHighlighted: false },
+  { code: 'ST-6', name: 'COAL HANDLING SYSTEM', isHighlighted: false },
+  { code: 'ST-7', name: 'COAL YARD', isHighlighted: false },
+  { code: 'ST-8', name: 'TG BUILDING', isHighlighted: false },
+  { code: 'ST-9', name: 'AOP TANK FARM', isHighlighted: false },
+  { code: 'ST-10', name: 'BAKERY TANK FARM', isHighlighted: false },
+  { code: 'ST-11', name: 'BEADING TANK FARM', isHighlighted: false },
+  { code: 'ST-12', name: 'CHEMICALS TANK FARM', isHighlighted: false },
+  { code: 'ST-13', name: 'CPO TANK FARM', isHighlighted: false },
+  { code: 'ST-14', name: 'IE TANK FARM', isHighlighted: false },
+  { code: 'ST-15', name: 'OLEO TANK FARM', isHighlighted: false },
+  { code: 'ST-16', name: 'PACKING TANK FARM', isHighlighted: false },
+  { code: 'ST-17', name: 'PKO TANK FARM', isHighlighted: false },
+  { code: 'ST-18', name: 'SOYA TANK FARM', isHighlighted: false },
+  { code: 'ST-19', name: 'SUNFLOWER TANK FARM', isHighlighted: false },
+  { code: 'ST-20', name: 'HYDROGENATION PLANT', isHighlighted: true },
+  { code: 'ST-21', name: 'PKO PLANT', isHighlighted: true },
+  { code: 'ST-22', name: 'SILO', isHighlighted: true },
+  { code: 'ST-23', name: 'WATER TANK', isHighlighted: false },
+  { code: 'ST-24', name: 'WTP', isHighlighted: true },
+  { code: 'ST-25', name: 'ETP', isHighlighted: true },
+  { code: 'ST-26', name: 'STP', isHighlighted: true },
+  { code: 'ST-27', name: 'WEIGHBRIDGE', isHighlighted: false },
+  { code: 'ST-28', name: 'OLEO WAREHOUSE', isHighlighted: false },
+  { code: 'ST-29', name: 'SPRAY COOLER PLANT', isHighlighted: false },
+  { code: 'ST-30', name: 'SOAP PLANT', isHighlighted: false },
+  { code: 'ST-31', name: 'ACID OIL PLANT', isHighlighted: false },
+  { code: 'ST-32', name: 'IE PLANT', isHighlighted: false },
+  { code: 'ST-33', name: 'PIPE RACK', isHighlighted: false },
+  { code: 'ST-34', name: 'SWITCH YARD', isHighlighted: false },
+  { code: 'ST-35', name: 'SPENT EARTH & CATALYST STORE', isHighlighted: false },
+  { code: 'ST-36', name: 'HSD STORAGE', isHighlighted: false },
+  { code: 'ST-37', name: 'RM AND FG LOADING & UNLOADING', isHighlighted: false },
+  { code: 'ST-38', name: 'PUMP HOUSE', isHighlighted: false },
+  { code: 'ST-39', name: 'PLANT UTILITY', isHighlighted: false },
+  { code: 'ST-40', name: 'GATE COMPLEX', isHighlighted: true },
+  { code: 'ST-41', name: 'COMPOUND WALL', isHighlighted: false },
+  { code: 'ST-42', name: 'ROAD', isHighlighted: false },
+  { code: 'ST-43', name: 'DRAIN', isHighlighted: false },
+  { code: 'ST-44', name: 'FOOTPATH', isHighlighted: false },
+  { code: 'ST-45', name: 'TOILET BLOCK', isHighlighted: true },
+  { code: 'ST-46', name: 'ADMIN BUILDING', isHighlighted: true },
+  { code: 'ST-47', name: 'WORKERS ENTRY', isHighlighted: false },
+  { code: 'ST-48', name: 'WATCH TOWER', isHighlighted: false },
+  { code: 'ST-49', name: 'WAREHOUSE', isHighlighted: true },
+  { code: 'ST-50', name: '2-POLE STRUCTURE', isHighlighted: false },
+  { code: 'ST-51', name: 'GARDEN WALL', isHighlighted: false },
+  { code: 'ST-52', name: 'STORE', isHighlighted: false },
+  { code: 'ST-53', name: 'STREET LIGHT/HIGH MAST', isHighlighted: false },
+];
+
+function generateDefaultNodes(): StructureNode[] {
+  return SEED_STRUCTURES.map((item, idx) => ({
+    id: (idx + 1).toString().padStart(3, '0'),
+    code: item.code,
+    name: item.name,
+    fullTag: `${item.code}-${item.name}`,
+    isHighlighted: item.isHighlighted,
+    files: [],
+  }));
+}
+
+export function formatBytes(bytes: number, decimals = 1): string {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// ----------------------------------------------------
+// DATABASE LOAD / SAVE LOGIC
+// ----------------------------------------------------
+function loadDatabase(): StructureNode[] {
+  try {
+    if (fs.existsSync(PLANT_DATABASE_FILE)) {
+      const data = fs.readFileSync(PLANT_DATABASE_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+    // Also check legacy files if migrating
+    const legacyServerStore = path.join(process.cwd(), 'server_store.json');
+    const legacyNodesStore = path.join(process.cwd(), 'nodes_store.json');
+    if (fs.existsSync(legacyNodesStore)) {
+      const data = fs.readFileSync(legacyNodesStore, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        saveDatabase(parsed);
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error('Error reading plant database:', err);
+  }
+
+  const defaults = generateDefaultNodes();
+  saveDatabase(defaults);
+  return defaults;
+}
+
+function saveDatabase(nodes: StructureNode[]) {
+  try {
+    fs.writeFileSync(PLANT_DATABASE_FILE, JSON.stringify(nodes, null, 2), 'utf-8');
+    // Also mirror to legacy files for backward compatibility
+    fs.writeFileSync(path.join(process.cwd(), 'nodes_store.json'), JSON.stringify(nodes, null, 2), 'utf-8');
+    const filesMap: Record<string, StoredFile[]> = {};
+    nodes.forEach(n => {
+      filesMap[n.code] = n.files || [];
+    });
+    fs.writeFileSync(path.join(process.cwd(), 'server_store.json'), JSON.stringify(filesMap, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving plant database:', err);
+  }
+}
+
+function loadR2Config(): R2Config {
+  let config: R2Config = {
+    accountId: process.env.R2_ACCOUNT_ID || '',
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+    bucketName: process.env.R2_BUCKET_NAME || '',
+    publicUrl: process.env.R2_PUBLIC_URL || '',
+  };
+
+  try {
+    if (fs.existsSync(R2_CONFIG_FILE)) {
+      const data = fs.readFileSync(R2_CONFIG_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      config = { ...config, ...parsed };
+    }
+  } catch (err) {
+    console.error('Error loading R2 config:', err);
+  }
+  return config;
+}
+
+function saveR2Config(config: R2Config) {
+  try {
+    fs.writeFileSync(R2_CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving R2 config:', err);
+  }
+}
+
+// In-memory runtime state hydrated directly from persistent disk
+let globalNodes: StructureNode[] = loadDatabase();
+let currentR2Config: R2Config = loadR2Config();
 
 function getR2Client(): S3Client | null {
   if (
@@ -71,76 +271,8 @@ function getR2Client(): S3Client | null {
   });
 }
 
-// Server-side persistent state for 53 structures and their uploaded files
-interface StoredFile {
-  id: string;
-  name: string;
-  extension: string;
-  sizeBytes: number;
-  sizeFormatted: string;
-  uploadDate: string;
-  uploadedBy: string;
-  version: string;
-  status: 'verified' | 'pending' | 'critical';
-  category: string;
-  branch: string;
-  drawingNumber?: string;
-  revision?: string;
-  r2Key?: string;
-  downloadUrl?: string;
-  localPath?: string;
-}
-
-const SERVER_STORE_FILE = path.join(process.cwd(), 'server_store.json');
-const NODES_STORE_FILE = path.join(process.cwd(), 'nodes_store.json');
-
-function loadServerFiles(): Record<string, StoredFile[]> {
-  try {
-    if (fs.existsSync(SERVER_STORE_FILE)) {
-      const data = fs.readFileSync(SERVER_STORE_FILE, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch (err) {
-    console.error('Error loading server store:', err);
-  }
-  return {};
-}
-
-function saveServerFiles(data: Record<string, StoredFile[]>) {
-  try {
-    fs.writeFileSync(SERVER_STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Error saving server store:', err);
-  }
-}
-
-function loadServerNodes(): any[] {
-  try {
-    if (fs.existsSync(NODES_STORE_FILE)) {
-      const data = fs.readFileSync(NODES_STORE_FILE, 'utf-8');
-      const parsed = JSON.parse(data);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch (err) {
-    console.error('Error loading nodes store:', err);
-  }
-  return [];
-}
-
-function saveServerNodes(nodes: any[]) {
-  try {
-    fs.writeFileSync(NODES_STORE_FILE, JSON.stringify(nodes, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Error saving nodes store:', err);
-  }
-}
-
-// Global in-memory storage dictionary initialized from disk
-let structureFiles: Record<string, StoredFile[]> = loadServerFiles();
-let serverNodes: any[] = loadServerNodes();
-
 // ----------------------------------------------------
-// API ROUTES
+// REST API ENDPOINTS
 // ----------------------------------------------------
 
 // 1. Health check
@@ -148,40 +280,557 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// 1.1 Master Nodes CRUD API (Synchronizes the 53 plant structures & attachments)
+// 2. GET /api/nodes - Master structures & associated files
 app.get('/api/nodes', (req, res) => {
   try {
-    const nodes = loadServerNodes();
-    res.json({ success: true, nodes });
+    const totalFiles = globalNodes.reduce((acc, n) => acc + (n.files?.length || 0), 0);
+    const totalSizeBytes = globalNodes.reduce(
+      (acc, n) => acc + (n.files || []).reduce((sub, f) => sub + (f.sizeBytes || 0), 0),
+      0
+    );
+
+    res.json({
+      success: true,
+      nodes: globalNodes,
+      totalCount: globalNodes.length,
+      totalFiles,
+      totalSizeBytes,
+      totalSizeFormatted: formatBytes(totalSizeBytes),
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
+// 3. POST /api/nodes - Save/Update entire nodes structure
 app.post('/api/nodes', (req, res) => {
   try {
     const { nodes } = req.body;
     if (Array.isArray(nodes)) {
-      serverNodes = nodes;
-      saveServerNodes(nodes);
-
-      // Sync structureFiles from nodes
-      const newFilesMap: Record<string, StoredFile[]> = {};
-      nodes.forEach((n: any) => {
-        if (n.code && Array.isArray(n.files)) {
-          newFilesMap[n.code] = n.files;
-        }
-      });
-      structureFiles = newFilesMap;
-      saveServerFiles(structureFiles);
+      globalNodes = nodes;
+      saveDatabase(nodes);
+      res.json({ success: true, count: nodes.length, message: 'Nodes updated successfully' });
+    } else {
+      res.status(400).json({ success: false, error: 'Expected an array of structure nodes' });
     }
-    res.json({ success: true, count: Array.isArray(nodes) ? nodes.length : 0 });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// 2. Cloudflare R2 Status & Configuration
+// 4. GET /api/files - Query all files across all structures with optional filtering
+app.get('/api/files', (req, res) => {
+  try {
+    const { branch, category, nodeCode, search } = req.query;
+
+    let allFiles: StoredFile[] = [];
+    globalNodes.forEach(node => {
+      if (nodeCode && node.code !== nodeCode) return;
+      (node.files || []).forEach(f => {
+        allFiles.push({
+          ...f,
+          nodeCode: node.code,
+        });
+      });
+    });
+
+    if (branch && typeof branch === 'string' && branch !== 'ALL') {
+      const bTarget = branch.toLowerCase();
+      allFiles = allFiles.filter(f => (f.branch || '').toLowerCase() === bTarget || (f.branchId || '').toLowerCase() === bTarget);
+    }
+
+    if (category && typeof category === 'string' && category !== 'ALL') {
+      allFiles = allFiles.filter(f => f.category === category);
+    }
+
+    if (search && typeof search === 'string') {
+      const q = search.toLowerCase();
+      allFiles = allFiles.filter(
+        f =>
+          f.name.toLowerCase().includes(q) ||
+          (f.drawingNumber && f.drawingNumber.toLowerCase().includes(q)) ||
+          f.nodeCode.toLowerCase().includes(q)
+      );
+    }
+
+    const totalSizeBytes = allFiles.reduce((acc, f) => acc + (f.sizeBytes || 0), 0);
+
+    res.json({
+      success: true,
+      files: allFiles,
+      count: allFiles.length,
+      totalSizeBytes,
+      totalSizeFormatted: formatBytes(totalSizeBytes),
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. POST /api/files - Add single or batch file records to a structure
+app.post('/api/files', (req, res) => {
+  try {
+    const { nodeCode, file, files, branch, category } = req.body;
+    const targetCode = nodeCode || (file && file.nodeCode);
+
+    if (!targetCode) {
+      return res.status(400).json({ success: false, error: 'nodeCode is required' });
+    }
+
+    const incomingList: any[] = Array.isArray(files)
+      ? files
+      : Array.isArray(file)
+      ? file
+      : file
+      ? [file]
+      : [];
+
+    if (incomingList.length === 0) {
+      return res.status(400).json({ success: false, error: 'No file items provided' });
+    }
+
+    const nodeIndex = globalNodes.findIndex(n => n.code === targetCode);
+    if (nodeIndex === -1) {
+      return res.status(404).json({ success: false, error: `Node ${targetCode} not found` });
+    }
+
+    const processedFiles: StoredFile[] = incomingList.map((item, idx) => {
+      const uuid = crypto.randomUUID();
+      const fileId = item.id || `fl-${uuid}`;
+      const ext = item.extension || (item.name ? item.name.split('.').pop()?.toLowerCase() : 'dwg') || 'dwg';
+      const sizeBytes = item.sizeBytes || 0;
+      const fileBranch = item.branch || branch || 'civil';
+      const fileCategory = item.category || category || 'DRAWINGS';
+
+      return {
+        id: fileId,
+        name: item.name || `Document-${uuid.slice(0, 6)}.${ext}`,
+        extension: ext,
+        sizeBytes,
+        sizeFormatted: item.sizeFormatted || formatBytes(sizeBytes),
+        uploadDate: item.uploadDate || new Date().toISOString().slice(0, 10),
+        uploadedBy: item.uploadedBy || 'Engineering Team',
+        version: item.version || item.revision || 'Rev-A',
+        status: item.status || 'verified',
+        category: fileCategory,
+        branch: fileBranch,
+        branchId: fileBranch,
+        nodeCode: targetCode,
+        drawingNumber: item.drawingNumber || `DWG-${fileBranch.toUpperCase().slice(0, 3)}-${targetCode}-${String(idx + 1).padStart(3, '0')}`,
+        revision: item.revision || item.version || 'Rev-A',
+        r2Key: item.r2Key,
+        downloadUrl: item.downloadUrl,
+        localPath: item.localPath,
+      };
+    });
+
+    const currentFiles = globalNodes[nodeIndex].files || [];
+    const existingIds = new Set(currentFiles.map(f => f.id));
+    const newItems = processedFiles.filter(f => !existingIds.has(f.id));
+
+    globalNodes[nodeIndex].files = [...newItems, ...currentFiles];
+    saveDatabase(globalNodes);
+
+    res.json({
+      success: true,
+      files: globalNodes[nodeIndex].files,
+      addedFiles: newItems,
+      addedCount: newItems.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. DELETE /api/files/:fileId - Delete file globally from nodes, R2, and disk
+app.delete('/api/files/:fileId', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    let foundFile: StoredFile | null = null;
+    let targetNodeCode = '';
+
+    globalNodes.forEach(node => {
+      const match = (node.files || []).find(f => f.id === fileId);
+      if (match) {
+        foundFile = match;
+        targetNodeCode = node.code;
+        node.files = node.files.filter(f => f.id !== fileId);
+      }
+    });
+
+    if (!foundFile) {
+      return res.json({ success: true, message: 'File was already removed' });
+    }
+
+    // Delete from Cloudflare R2 if applicable
+    if ((foundFile as StoredFile).r2Key) {
+      const s3 = getR2Client();
+      if (s3 && currentR2Config.bucketName) {
+        try {
+          await s3.send(
+            new DeleteObjectCommand({
+              Bucket: currentR2Config.bucketName,
+              Key: (foundFile as StoredFile).r2Key,
+            })
+          );
+        } catch (s3Err) {
+          console.warn('Could not delete object from R2:', s3Err);
+        }
+      }
+    }
+
+    // Delete local buffer if exists
+    if ((foundFile as StoredFile).localPath && fs.existsSync((foundFile as StoredFile).localPath!)) {
+      try {
+        fs.unlinkSync((foundFile as StoredFile).localPath!);
+      } catch (unlinkErr) {
+        console.warn('Could not delete local file:', unlinkErr);
+      }
+    }
+
+    saveDatabase(globalNodes);
+
+    res.json({
+      success: true,
+      fileId,
+      nodeCode: targetNodeCode,
+      message: 'File deleted from central database and storage successfully',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Backward compatibility delete endpoint: /api/structures/:nodeCode/files/:fileId
+app.delete('/api/structures/:nodeCode/files/:fileId', async (req, res) => {
+  const { fileId } = req.params;
+  req.url = `/api/files/${fileId}`;
+  return app._router.handle(req, res);
+});
+
+// 7. GET /api/branches - Branch tree and discipline storage stats
+app.get('/api/branches', (req, res) => {
+  try {
+    const branches: Branch[] = ['civil', 'mechanical', 'eni'];
+    const branchStats = branches.map(b => {
+      const branchFiles: StoredFile[] = [];
+      const activeStructures = new Set<string>();
+
+      globalNodes.forEach(node => {
+        (node.files || []).forEach(f => {
+          if (f.branch === b || f.branchId === b) {
+            branchFiles.push(f);
+            activeStructures.add(node.code);
+          }
+        });
+      });
+
+      const sizeBytes = branchFiles.reduce((acc, f) => acc + (f.sizeBytes || 0), 0);
+
+      const labels: Record<Branch, string> = {
+        civil: 'Civil Engineering',
+        mechanical: 'Mechanical Engineering',
+        eni: 'Electrical & Inst.',
+      };
+
+      return {
+        branchId: b,
+        branch: b,
+        label: labels[b],
+        fileCount: branchFiles.length,
+        sizeBytes,
+        sizeFormatted: formatBytes(sizeBytes),
+        activeNodesCount: activeStructures.size,
+        totalStructures: globalNodes.length,
+      };
+    });
+
+    res.json({
+      success: true,
+      branches: branchStats,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 8. DELETE /api/branches/:branch - Purge an entire branch across all 53 structures
+app.delete('/api/branches/:branch', async (req, res) => {
+  try {
+    const targetBranch = req.params.branch as Branch;
+    let deletedCount = 0;
+    const filesToDelete: StoredFile[] = [];
+
+    globalNodes.forEach(node => {
+      const remaining: StoredFile[] = [];
+      (node.files || []).forEach(f => {
+        if (f.branch === targetBranch || f.branchId === targetBranch) {
+          deletedCount++;
+          filesToDelete.push(f);
+        } else {
+          remaining.push(f);
+        }
+      });
+      node.files = remaining;
+    });
+
+    saveDatabase(globalNodes);
+
+    // Clean up files in background
+    const s3 = getR2Client();
+    for (const f of filesToDelete) {
+      if (f.r2Key && s3 && currentR2Config.bucketName) {
+        s3.send(
+          new DeleteObjectCommand({
+            Bucket: currentR2Config.bucketName,
+            Key: f.r2Key,
+          })
+        ).catch(() => {});
+      }
+      if (f.localPath && fs.existsSync(f.localPath)) {
+        try {
+          fs.unlinkSync(f.localPath);
+        } catch (e) {}
+      }
+    }
+
+    res.json({
+      success: true,
+      branch: targetBranch,
+      deletedCount,
+      message: `Successfully purged ${deletedCount} documents for ${targetBranch.toUpperCase()}`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 9. DELETE /api/nodes/:nodeCode/category/:category
+app.delete('/api/nodes/:nodeCode/category/:category', (req, res) => {
+  try {
+    const { nodeCode, category } = req.params;
+    const { branch } = req.query;
+
+    const node = globalNodes.find(n => n.code === nodeCode);
+    if (!node) {
+      return res.status(404).json({ success: false, error: `Node ${nodeCode} not found` });
+    }
+
+    const beforeCount = node.files.length;
+    node.files = node.files.filter(f => {
+      const matchCat = f.category === category;
+      const matchBranch = !branch || branch === 'ALL' || f.branch === branch || f.branchId === branch;
+      return !(matchCat && matchBranch);
+    });
+
+    const deletedCount = beforeCount - node.files.length;
+    saveDatabase(globalNodes);
+
+    res.json({
+      success: true,
+      nodeCode,
+      category,
+      deletedCount,
+      remainingFiles: node.files,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 10. GET /api/storage-stats - Real-time global storage usage & discipline breakdown
+app.get('/api/storage-stats', (req, res) => {
+  try {
+    let totalFiles = 0;
+    let totalDrawingFiles = 0;
+    let totalSizeBytes = 0;
+
+    const branchBreakdown: Record<Branch, { count: number; sizeBytes: number; sizeFormatted: string; activeNodesCount: number }> = {
+      civil: { count: 0, sizeBytes: 0, sizeFormatted: '0 B', activeNodesCount: 0 },
+      mechanical: { count: 0, sizeBytes: 0, sizeFormatted: '0 B', activeNodesCount: 0 },
+      eni: { count: 0, sizeBytes: 0, sizeFormatted: '0 B', activeNodesCount: 0 },
+    };
+
+    const branchActiveNodes: Record<Branch, Set<string>> = {
+      civil: new Set(),
+      mechanical: new Set(),
+      eni: new Set(),
+    };
+
+    globalNodes.forEach(node => {
+      (node.files || []).forEach(f => {
+        totalFiles++;
+        totalSizeBytes += f.sizeBytes || 0;
+        if (f.category === 'DRAWINGS') {
+          totalDrawingFiles++;
+        }
+
+        const b = (f.branch || f.branchId || 'civil') as Branch;
+        if (branchBreakdown[b]) {
+          branchBreakdown[b].count++;
+          branchBreakdown[b].sizeBytes += f.sizeBytes || 0;
+          branchActiveNodes[b].add(node.code);
+        }
+      });
+    });
+
+    (['civil', 'mechanical', 'eni'] as Branch[]).forEach(b => {
+      branchBreakdown[b].sizeFormatted = formatBytes(branchBreakdown[b].sizeBytes);
+      branchBreakdown[b].activeNodesCount = branchActiveNodes[b].size;
+    });
+
+    const isR2Configured = Boolean(
+      currentR2Config.accountId &&
+      currentR2Config.accessKeyId &&
+      currentR2Config.secretAccessKey &&
+      currentR2Config.bucketName
+    );
+
+    res.json({
+      success: true,
+      totalFiles,
+      totalDrawingFilesCount: totalDrawingFiles,
+      totalSizeBytes,
+      totalSizeFormatted: formatBytes(totalSizeBytes),
+      branches: branchBreakdown,
+      structuresCount: globalNodes.length,
+      r2Configured: isR2Configured,
+      r2Bucket: currentR2Config.bucketName || '',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 11. POST /api/r2/upload - Multipart upload handling single & multi files with unique keys & R2 pipe
+app.post('/api/r2/upload', upload.any(), async (req, res) => {
+  try {
+    const rawFiles = (req.files as Express.Multer.File[]) || (req.file ? [req.file] : []);
+    if (!rawFiles || rawFiles.length === 0) {
+      return res.status(400).json({ error: 'No files provided in form-data' });
+    }
+
+    const { 
+      nodeCode = 'ST-1', 
+      branch = 'civil', 
+      category = 'DRAWINGS', 
+      drawingNumber, 
+      revision = 'Rev-A', 
+      uploadedBy = 'Engineering Team', 
+      status = 'verified', 
+      relativePath,
+      fileKey: customFileKey,
+      fileId: customFileId,
+      relativePaths
+    } = req.body;
+
+    let relativePathsMap: Record<string, string> = {};
+    if (typeof relativePaths === 'string') {
+      try {
+        relativePathsMap = JSON.parse(relativePaths);
+      } catch (e) {
+        // ignore parse error
+      }
+    }
+
+    const s3 = getR2Client();
+    const uploadedFileRecords: StoredFile[] = [];
+
+    for (let i = 0; i < rawFiles.length; i++) {
+      const file = rawFiles[i];
+      const origName = file.originalname;
+      const fileRelativePath = relativePathsMap[origName] || (rawFiles.length === 1 ? relativePath : '') || origName;
+
+      // Unique file key for EVERY file using crypto.randomUUID() + '-' + file.name
+      const uniqueUUID = crypto.randomUUID();
+      const fileKey = customFileKey && rawFiles.length === 1
+        ? customFileKey
+        : `${uniqueUUID}-${origName}`;
+      const fileId = customFileId && rawFiles.length === 1
+        ? customFileId
+        : `fl-${uniqueUUID}`;
+
+      const cleanFileKey = fileKey.replace(/[^a-zA-Z0-9._/-]/g, '_');
+      const r2Key = `drawings/${nodeCode}/${branch}/${category}/${cleanFileKey}`;
+      let downloadUrl = `/api/r2/download/${path.basename(file.path)}`;
+
+      // Upload each file individually to Cloudflare R2
+      if (s3 && currentR2Config.bucketName) {
+        try {
+          const fileBuffer = fs.readFileSync(file.path);
+          const putCmd = new PutObjectCommand({
+            Bucket: currentR2Config.bucketName,
+            Key: r2Key,
+            Body: fileBuffer,
+            ContentType: file.mimetype || 'application/octet-stream',
+          });
+          await s3.send(putCmd);
+
+          if (currentR2Config.publicUrl) {
+            downloadUrl = `${currentR2Config.publicUrl.replace(/\/$/, '')}/${r2Key}`;
+          } else {
+            downloadUrl = `/api/r2/download-key?key=${encodeURIComponent(r2Key)}`;
+          }
+        } catch (s3Err) {
+          console.warn(`R2 Put failed for ${origName}, continuing with local storage fallback:`, s3Err);
+        }
+      }
+
+      const ext = (origName.split('.').pop() || 'dwg').toLowerCase();
+      const docNumber = drawingNumber
+        ? (rawFiles.length > 1 ? `${drawingNumber}-${String(i + 1).padStart(3, '0')}` : drawingNumber)
+        : `DWG-${branch.toUpperCase().slice(0, 3)}-${nodeCode}-${Date.now().toString().slice(-4)}-${String(i + 1).padStart(2, '0')}`;
+
+      const newFileRecord: StoredFile = {
+        id: fileId,
+        name: fileRelativePath,
+        extension: ext,
+        sizeBytes: file.size,
+        sizeFormatted: formatBytes(file.size),
+        uploadDate: new Date().toISOString().slice(0, 10),
+        uploadedBy: uploadedBy || 'Engineering Team',
+        version: revision || 'Rev-A',
+        status: (status as any) || 'verified',
+        category: category || 'DRAWINGS',
+        branch: branch || 'civil',
+        branchId: branch || 'civil',
+        nodeCode: nodeCode,
+        drawingNumber: docNumber,
+        revision: revision || 'Rev-A',
+        r2Key,
+        downloadUrl,
+        localPath: file.path,
+      };
+
+      uploadedFileRecords.push(newFileRecord);
+    }
+
+    // Insert all uploaded files into central global database
+    const nodeIndex = globalNodes.findIndex(n => n.code === nodeCode);
+    if (nodeIndex !== -1) {
+      const current = globalNodes[nodeIndex].files || [];
+      const existingIds = new Set(current.map(f => f.id));
+      const filteredNew = uploadedFileRecords.filter(f => !existingIds.has(f.id));
+      globalNodes[nodeIndex].files = [...filteredNew, ...current];
+      saveDatabase(globalNodes);
+    }
+
+    return res.json({
+      success: true,
+      files: uploadedFileRecords,
+      file: uploadedFileRecords[0],
+      count: uploadedFileRecords.length,
+      nodeCode,
+      branch,
+      message: `${uploadedFileRecords.length} file(s) successfully uploaded and indexed in central database`,
+    });
+  } catch (err: any) {
+    console.error('Upload handler error:', err);
+    return res.status(500).json({ error: err.message || 'File upload failed' });
+  }
+});
+
+// 12. Cloudflare R2 Status & Configuration
 app.get('/api/r2/status', (req, res) => {
   const isConfigured = Boolean(
     currentR2Config.accountId &&
@@ -209,6 +858,8 @@ app.post('/api/r2/config', (req, res) => {
   if (secretAccessKey !== undefined) currentR2Config.secretAccessKey = secretAccessKey.trim();
   if (bucketName !== undefined) currentR2Config.bucketName = bucketName.trim();
   if (publicUrl !== undefined) currentR2Config.publicUrl = publicUrl.trim();
+
+  saveR2Config(currentR2Config);
 
   res.json({
     success: true,
@@ -239,7 +890,6 @@ app.post('/api/r2/test-connection', async (req, res) => {
       });
     }
 
-    // Attempt list or head bucket
     const cmd = new ListObjectsV2Command({
       Bucket: currentR2Config.bucketName,
       MaxKeys: 5,
@@ -261,7 +911,7 @@ app.post('/api/r2/test-connection', async (req, res) => {
   }
 });
 
-// 3. Pre-signed upload URL for Direct Large File Upload (Multi-GB)
+// 13. Pre-signed upload URL for Direct Large File Upload (Multi-GB)
 app.post('/api/r2/presigned-upload-url', async (req, res) => {
   try {
     const { fileName, contentType, nodeCode, branch, category } = req.body;
@@ -275,7 +925,6 @@ app.post('/api/r2/presigned-upload-url', async (req, res) => {
     const r2Key = `drawings/${nodeCode}/${branch || 'general'}/${category || 'DRAWINGS'}/${Date.now()}-${cleanFileName}`;
 
     if (!s3 || !currentR2Config.bucketName) {
-      // Local fallback mode
       return res.json({
         useLocalFallback: true,
         r2Key,
@@ -289,7 +938,6 @@ app.post('/api/r2/presigned-upload-url', async (req, res) => {
       ContentType: contentType || 'application/octet-stream',
     });
 
-    // 1 hour expiry for large uploads
     const presignedUrl = await getSignedUrl(s3, command, { expiresIn: 3600 });
 
     return res.json({
@@ -304,154 +952,7 @@ app.post('/api/r2/presigned-upload-url', async (req, res) => {
   }
 });
 
-// 4. Multipart direct upload handler (supporting single and multiple file uploads, direct S3 pipe, and local storage)
-app.post('/api/r2/upload', upload.any(), async (req, res) => {
-  try {
-    const rawFiles = (req.files as Express.Multer.File[]) || (req.file ? [req.file] : []);
-    if (!rawFiles || rawFiles.length === 0) {
-      return res.status(400).json({ error: 'No files provided in form-data' });
-    }
-
-    const { 
-      nodeCode, 
-      branch, 
-      category, 
-      drawingNumber, 
-      revision, 
-      uploadedBy, 
-      status, 
-      relativePath,
-      fileKey: customFileKey,
-      fileId: customFileId,
-      relativePaths
-    } = req.body;
-
-    let relativePathsMap: Record<string, string> = {};
-    if (typeof relativePaths === 'string') {
-      try {
-        relativePathsMap = JSON.parse(relativePaths);
-      } catch (e) {
-        // ignore parse error
-      }
-    }
-
-    const s3 = getR2Client();
-    const uploadedFileRecords: StoredFile[] = [];
-
-    const formatBytes = (bytes: number) => {
-      if (bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-    };
-
-    for (let i = 0; i < rawFiles.length; i++) {
-      const file = rawFiles[i];
-      const origName = file.originalname;
-      const fileRelativePath = relativePathsMap[origName] || (rawFiles.length === 1 ? relativePath : '') || origName;
-
-      // Unique file key for EVERY file using crypto.randomUUID() + '-' + file.name
-      const uniqueUUID = crypto.randomUUID();
-      const fileKey = customFileKey && rawFiles.length === 1
-        ? customFileKey
-        : `${uniqueUUID}-${origName}`;
-      const fileId = customFileId && rawFiles.length === 1
-        ? customFileId
-        : `fl-${uniqueUUID}`;
-
-      const cleanFileKey = fileKey.replace(/[^a-zA-Z0-9._/-]/g, '_');
-      const r2Key = `drawings/${nodeCode || 'GENERAL'}/${branch || 'civil'}/${category || 'DRAWINGS'}/${cleanFileKey}`;
-      let downloadUrl = `/api/r2/download/${path.basename(file.path)}`;
-
-      // Upload each file individually to Cloudflare R2
-      if (s3 && currentR2Config.bucketName) {
-        try {
-          const fileBuffer = fs.readFileSync(file.path);
-          const putCmd = new PutObjectCommand({
-            Bucket: currentR2Config.bucketName,
-            Key: r2Key,
-            Body: fileBuffer,
-            ContentType: file.mimetype || 'application/octet-stream',
-          });
-          await s3.send(putCmd);
-
-          if (currentR2Config.publicUrl) {
-            downloadUrl = `${currentR2Config.publicUrl.replace(/\/$/, '')}/${r2Key}`;
-          } else {
-            downloadUrl = `/api/r2/download-key?key=${encodeURIComponent(r2Key)}`;
-          }
-        } catch (s3Err) {
-          console.warn(`R2 Put failed for ${origName}, continuing with local storage fallback:`, s3Err);
-        }
-      }
-
-      const ext = (origName.split('.').pop() || 'dwg').toLowerCase();
-      const docNumber = drawingNumber
-        ? (rawFiles.length > 1 ? `${drawingNumber}-${String(i + 1).padStart(3, '0')}` : drawingNumber)
-        : `DWG-${(branch || 'civil').toUpperCase().slice(0, 3)}-${nodeCode || 'ST'}-${Date.now().toString().slice(-4)}-${String(i + 1).padStart(2, '0')}`;
-
-      const newFileRecord: StoredFile = {
-        id: fileId,
-        name: fileRelativePath,
-        extension: ext,
-        sizeBytes: file.size,
-        sizeFormatted: formatBytes(file.size),
-        uploadDate: new Date().toISOString().slice(0, 10),
-        uploadedBy: uploadedBy || 'Engineering Team',
-        version: revision || 'Rev-A',
-        status: (status as any) || 'verified',
-        category: category || 'DRAWINGS',
-        branch: branch || 'civil',
-        drawingNumber: docNumber,
-        revision: revision || 'Rev-A',
-        r2Key,
-        downloadUrl,
-        localPath: file.path,
-      };
-
-      uploadedFileRecords.push(newFileRecord);
-    }
-
-    // Insert all uploaded files into database/state without overwriting existing records
-    if (nodeCode && uploadedFileRecords.length > 0) {
-      if (!structureFiles[nodeCode]) {
-        structureFiles[nodeCode] = [];
-      }
-      const existingIds = new Set(structureFiles[nodeCode].map(f => f.id));
-      const filteredNew = uploadedFileRecords.filter(f => !existingIds.has(f.id));
-      structureFiles[nodeCode] = [...filteredNew, ...structureFiles[nodeCode]];
-      saveServerFiles(structureFiles);
-
-      // Keep serverNodes in sync
-      if (Array.isArray(serverNodes) && serverNodes.length > 0) {
-        serverNodes = serverNodes.map((n: any) => {
-          if (n.code === nodeCode) {
-            return {
-              ...n,
-              files: structureFiles[nodeCode]
-            };
-          }
-          return n;
-        });
-        saveServerNodes(serverNodes);
-      }
-    }
-
-    return res.json({
-      success: true,
-      files: uploadedFileRecords,
-      file: uploadedFileRecords[0],
-      count: uploadedFileRecords.length,
-      message: `${uploadedFileRecords.length} file(s) successfully uploaded and indexed in Document Portal`,
-    });
-  } catch (err: any) {
-    console.error('Upload handler error:', err);
-    return res.status(500).json({ error: err.message || 'File upload failed' });
-  }
-});
-
-// 5. Pre-signed Download URL & Direct File Download
+// 14. Pre-signed Download URL & Direct File Download
 app.get('/api/r2/download-key', async (req, res) => {
   try {
     const key = req.query.key as string;
@@ -476,7 +977,7 @@ app.get('/api/r2/download-key', async (req, res) => {
   }
 });
 
-// 6. Direct local file download
+// 15. Direct local file download
 app.get('/api/r2/download/:filename', (req, res) => {
   const filePath = path.join(UPLOADS_DIR, req.params.filename);
   if (fs.existsSync(filePath)) {
@@ -485,100 +986,20 @@ app.get('/api/r2/download/:filename', (req, res) => {
   return res.status(404).send('File not found');
 });
 
-// 7. Get structure files dictionary
-app.get('/api/structures/files', (req, res) => {
-  res.json(structureFiles);
-});
-
-// 8. Add a file record or batch file records
-app.post('/api/structures/file', (req, res) => {
-  const { nodeCode, file, files } = req.body;
-  const itemsToAdd: StoredFile[] = Array.isArray(files)
-    ? files
-    : Array.isArray(file)
-    ? file
-    : file
-    ? [file]
-    : [];
-
-  if (!nodeCode || itemsToAdd.length === 0) {
-    return res.status(400).json({ error: 'nodeCode and file/files are required' });
-  }
-
-  if (!structureFiles[nodeCode]) {
-    structureFiles[nodeCode] = [];
-  }
-
-  const existingIds = new Set(structureFiles[nodeCode].map(f => f.id));
-  const newUnique = itemsToAdd.filter(f => !existingIds.has(f.id));
-  structureFiles[nodeCode] = [...newUnique, ...structureFiles[nodeCode]];
-  saveServerFiles(structureFiles);
-
-  // Keep serverNodes in sync
-  if (Array.isArray(serverNodes) && serverNodes.length > 0) {
-    serverNodes = serverNodes.map((n: any) => {
-      if (n.code === nodeCode) {
-        return {
-          ...n,
-          files: structureFiles[nodeCode],
-        };
-      }
-      return n;
-    });
-    saveServerNodes(serverNodes);
-  }
-
-  res.json({ success: true, files: structureFiles[nodeCode], addedCount: newUnique.length });
-});
-
-// 9. Delete a file record
-app.delete('/api/structures/:nodeCode/files/:fileId', async (req, res) => {
-  const { nodeCode, fileId } = req.params;
-  if (!structureFiles[nodeCode]) {
-    return res.json({ success: true });
-  }
-
-  const fileToDelete = structureFiles[nodeCode].find(f => f.id === fileId);
-  if (fileToDelete) {
-    // Attempt deletion from Cloudflare R2 if key exists
-    if (fileToDelete.r2Key) {
-      const s3 = getR2Client();
-      if (s3 && currentR2Config.bucketName) {
-        try {
-          await s3.send(new DeleteObjectCommand({
-            Bucket: currentR2Config.bucketName,
-            Key: fileToDelete.r2Key,
-          }));
-        } catch (s3Err) {
-          console.warn('Failed to delete object from R2:', s3Err);
-        }
-      }
-    }
-    // Delete local file if exists
-    if (fileToDelete.localPath && fs.existsSync(fileToDelete.localPath)) {
-      try {
-        fs.unlinkSync(fileToDelete.localPath);
-      } catch (unlinkErr) {
-        console.warn('Failed to delete local file:', unlinkErr);
-      }
-    }
-  }
-
-  structureFiles[nodeCode] = structureFiles[nodeCode].filter(f => f.id !== fileId);
-  saveServerFiles(structureFiles);
-
-  res.json({ success: true });
-});
-
-// 10. Clear / Reset all files
+// 16. Clear / Reset all files across all structures
 app.post('/api/structures/reset', (req, res) => {
-  structureFiles = {};
-  saveServerFiles(structureFiles);
-  if (Array.isArray(serverNodes) && serverNodes.length > 0) {
-    serverNodes = serverNodes.map((n: any) => ({ ...n, files: [] }));
-    saveServerNodes(serverNodes);
-  }
-  res.json({ success: true, message: 'Reset all structures to 0 files.' });
+  globalNodes = globalNodes.map(n => ({ ...n, files: [] }));
+  saveDatabase(globalNodes);
+  res.json({ success: true, message: 'Reset all structures to 0 files successfully.' });
+});
+
+// Legacy structures files endpoint
+app.get('/api/structures/files', (req, res) => {
+  const filesMap: Record<string, StoredFile[]> = {};
+  globalNodes.forEach(n => {
+    filesMap[n.code] = n.files || [];
+  });
+  res.json(filesMap);
 });
 
 // ----------------------------------------------------

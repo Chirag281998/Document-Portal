@@ -16,6 +16,8 @@ export interface NodeFile {
   status: 'verified' | 'pending' | 'critical';
   category: Category;
   branch: Branch;
+  branchId?: Branch;
+  nodeCode?: string;
   drawingNumber?: string;
   revision?: string;
   r2Key?: string;
@@ -54,3 +56,18 @@ export interface BranchStats {
   activeNodesCount: number;
 }
 
+export interface GlobalStorageStats {
+  totalFiles: number;
+  totalDrawingFilesCount: number;
+  totalSizeBytes: number;
+  totalSizeFormatted: string;
+  branches: Record<Branch, {
+    count: number;
+    sizeBytes: number;
+    sizeFormatted: string;
+    activeNodesCount: number;
+  }>;
+  structuresCount: number;
+  r2Configured: boolean;
+  r2Bucket?: string;
+}
